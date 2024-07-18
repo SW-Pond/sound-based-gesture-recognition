@@ -5,17 +5,18 @@ import numpy as np
 import pyaudio
 from matplotlib.animation import FuncAnimation
 
+# CHANGE AS NEEDED
 SAMPLE_RATE = 44100
-INPUT_FRAMES_PER_BUFFER = 2048
-LEFT_OUT_FREQ = 18000
+INPUT_FRAMES_PER_BUFFER = 4096
+PEAK_MARGIN = 250 # in Hz
+LEFT_OUT_FREQ = 18000 # must be lower than right
 RIGHT_OUT_FREQ = 18500
-NUM_OUT_CHANNELS = 2
-NUM_IN_CHANNELS = 1
 
-##############Make code more adaptive to changing constants
+# DON'T CHANGE
+FREQ_SPACING = SAMPLE_RATE / INPUT_FRAMES_PER_BUFFER
 
 def output_tone():
-    out_stream = pyaudio.PyAudio().open(format=pyaudio.paFloat32, channels=NUM_OUT_CHANNELS, rate=SAMPLE_RATE, output=True)
+    out_stream = pyaudio.PyAudio().open(format=pyaudio.paFloat32, channels=2, rate=SAMPLE_RATE, output=True)
 
     samples = generate_samples()
     
@@ -36,16 +37,16 @@ def generate_samples():
 
     return samples.tobytes()
 
-def get_audio_input(in_q, scan_q):
-    #Indices for frequencies in range 17kHz-19kHz
-    RANGE_START = 790
-    RANGE_END = 884
+def get_audio_input(input_q, scan_q):
+    #Setting lower bound of interest to the frequency: LEFT_OUT_FREQ - PEAK_MARGIN
+    RANGE_START = int(np.floor((LEFT_OUT_FREQ - PEAK_MARGIN) / FREQ_SPACING))
+    #Setting higher bound of interest to the frequency: RIGHT_OUT_FREQ + PEAK_MARGIN
+    RANGE_END = int(np.ceil((RIGHT_OUT_FREQ + PEAK_MARGIN) / FREQ_SPACING))
 
-    in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=NUM_IN_CHANNELS, rate=SAMPLE_RATE, input=True, frames_per_buffer=INPUT_FRAMES_PER_BUFFER)
+    in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=SAMPLE_RATE, input=True, frames_per_buffer=INPUT_FRAMES_PER_BUFFER)
 
-    window = np.hamming(INPUT_FRAMES_PER_BUFFER * NUM_IN_CHANNELS)
+    window = np.hamming(INPUT_FRAMES_PER_BUFFER)
     freqs = np.linspace(0, SAMPLE_RATE / 2, (INPUT_FRAMES_PER_BUFFER // 2) + 1)
-
     freqs = freqs[RANGE_START:RANGE_END]
 
     while True:
@@ -59,19 +60,19 @@ def get_audio_input(in_q, scan_q):
 
         data = np.vstack((freqs, freq_dB_amps))
         scan_q.put(np.copy(data))
-        in_q.put(data)
+        input_q.put(data)
 
-def plot(in_q):
+def plot(input_q):
     fig = plt.figure()
-    ax = fig.add_subplot(xlim=(17000, 19000), ylim=(-30, 100))
+    ax = fig.add_subplot(xlim=(LEFT_OUT_FREQ - PEAK_MARGIN, RIGHT_OUT_FREQ + PEAK_MARGIN), ylim=(-30, 100))
     ax.set_xlabel("Frequency(Hz)", size=10)
     ax.set_ylabel("Amplitude(dB?)", size=10)
     ax.axhline(0, color='red', linestyle='-', lw=1)
     line, = ax.plot([], [])
 
     def update_plot(i):
-        if not in_q.empty():
-            data = in_q.get()
+        if not input_q.empty():
+            data = input_q.get()
             freqs = data[0]
             amps = data[1]
             
@@ -89,6 +90,7 @@ def scan(scan_q):
             amps = data[1]
             primary_scan(freqs, amps)
 
+######################### 16 bins on either side of peak, not 33
 def primary_scan(freqs, amps):
     pilot_idx = len(freqs) // 2 - 1
     pilot_amp = amps[pilot_idx]
