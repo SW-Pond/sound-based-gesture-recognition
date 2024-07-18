@@ -7,29 +7,34 @@ from matplotlib.animation import FuncAnimation
 
 SAMPLE_RATE = 44100
 INPUT_FRAMES_PER_BUFFER = 2048
-OUTPUT_FREQ = 18000
+LEFT_OUT_FREQ = 18000
+RIGHT_OUT_FREQ = 18500
 NUM_OUT_CHANNELS = 2
 NUM_IN_CHANNELS = 1
-
 
 ##############Make code more adaptive to changing constants
 
 def output_tone():
     out_stream = pyaudio.PyAudio().open(format=pyaudio.paFloat32, channels=NUM_OUT_CHANNELS, rate=SAMPLE_RATE, output=True)
 
-    duration = 1
-    num_samples = SAMPLE_RATE * duration
+    samples = generate_samples()
+    
+    while True:
+        out_stream.write(samples)
+    
+def generate_samples():
+    samples = np.empty(SAMPLE_RATE * 2, dtype=np.float32)
+    left_samples = np.array( [np.sin(2 * np.pi * LEFT_OUT_FREQ * (i / SAMPLE_RATE)) for i in range(SAMPLE_RATE)] ).astype(np.float32)
+    right_samples = np.array( [np.sin(2 * np.pi * RIGHT_OUT_FREQ * (i / SAMPLE_RATE)) for i in range(SAMPLE_RATE)] ).astype(np.float32)
 
-    samples = np.array( [np.sin(2 * np.pi * (OUTPUT_FREQ / NUM_OUT_CHANNELS) * (i / SAMPLE_RATE)) for i in range(num_samples)] ).astype(np.float32)
+    for i in range(0, len(samples), 2):
+        samples[i] = right_samples[i // 2]
+        samples[i + 1] = left_samples[i // 2]
 
-    #Makes samples longer, creating smoother tone
     while(len(samples) / SAMPLE_RATE < 10000):
         samples = np.concatenate((samples, samples), axis=None)
 
-    byte_samples = samples.tobytes()
-
-    while True:
-        out_stream.write(byte_samples)
+    return samples.tobytes()
 
 def get_audio_input(in_q, scan_q):
     #Indices for frequencies in range 17kHz-19kHz
@@ -85,8 +90,6 @@ def scan(scan_q):
             primary_scan(freqs, amps)
 
 def primary_scan(freqs, amps):
-    #check_vals(freqs, amps)
-
     pilot_idx = len(freqs) // 2 - 1
     pilot_amp = amps[pilot_idx]
     AMP_SHIFT_THRESHOLD = 0.5 * pilot_amp
@@ -117,20 +120,6 @@ def primary_scan(freqs, amps):
 
 def secondary_scan():
     return 0
-
-def check_vals(freqs, amps):
-        print("Amplitudes : Frequencies : Index")
-        for i in range(min(len(freqs), len(amps))):
-            print(str(freqs[i]) + " : " + str(amps[i]) + " : " + str(i))
-        
-        print()
-        max_idx = np.argmax(amps)
-        max_amp = amps[max_idx]
-        corresponding_freq = freqs[max_idx]
-        print("Greatest Amp / Corresponding Freq | " + str(max_amp) + " / " + str(corresponding_freq))
-        print("Amp at next 3 freqs to the left: " + str(amps[max_idx-3]) + ", " + str(amps[max_idx-2]) + ", "+ str(amps[max_idx-1]))
-        print("Amp at next 3 freqs to the right: " + str(amps[max_idx+1]) + ", " + str(amps[max_idx+2]) + ", "+ str(amps[max_idx+3]))
-        print("-----------------")
 
 if __name__ == "__main__":
     input_queue = mp.Queue()
