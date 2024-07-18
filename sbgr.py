@@ -20,15 +20,19 @@ def output_tone():
     duration = 1
     num_samples = SAMPLE_RATE * duration
 
-    ############Figure out a way to create a less choppy sine wave (potentially smaller intervals for samples)
     samples = np.array( [np.sin(2 * np.pi * (OUTPUT_FREQ / NUM_OUT_CHANNELS) * (i / SAMPLE_RATE)) for i in range(num_samples)] ).astype(np.float32)
+
+    #Makes samples longer, creating smoother tone
+    while(len(samples) / SAMPLE_RATE < 10000):
+        samples = np.concatenate((samples, samples), axis=None)
+
     byte_samples = samples.tobytes()
 
     while True:
         out_stream.write(byte_samples)
 
 def get_audio_input(in_q, scan_q):
-    #Indices for frequencies in 17kHz-19kHz
+    #Indices for frequencies in range 17kHz-19kHz
     RANGE_START = 790
     RANGE_END = 884
 
