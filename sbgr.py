@@ -38,8 +38,8 @@ def generate_samples():
 
     # Interleaving samples
     for i in range(0, len(samples), 2):
-        samples[i] = right_samples[i // 2]
-        samples[i + 1] = left_samples[i // 2]
+        samples[i] = left_samples[i // 2]
+        samples[i + 1] = right_samples[i // 2]
 
     # Makes samples longer, creating smoother tone
     while(len(samples) / SAMPLE_RATE < 10000):
