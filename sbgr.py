@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyaudio
 from matplotlib.animation import FuncAnimation
+from matplotlib.ticker import MultipleLocator
 
 # CHANGE AS NEEDED
 SAMPLE_RATE = 44100
@@ -92,17 +93,27 @@ def to_dB_and_filter(amps):
 def plot(input_q):
     fig = plt.figure()
     ax = fig.add_subplot(xlim=(LEFT_OUT_FREQ - PEAK_MARGIN, RIGHT_OUT_FREQ + PEAK_MARGIN), ylim=(0, 100))
+    ax.xaxis.set_minor_locator(MultipleLocator(25))
+    ax.xaxis.set_major_locator(MultipleLocator(250))
+    ax.xaxis.set_tick_params(which='minor', length=3, width=0.75)
+    ax.xaxis.set_tick_params(which='major', length=6, width=1)
+    ax.yaxis.set_minor_locator(MultipleLocator(1))
+    ax.yaxis.set_major_locator(MultipleLocator(10))
+    ax.yaxis.set_tick_params(which='minor', length=3, width=0.3)
+    ax.yaxis.set_tick_params(which='major', length=6, width=0.5)
     ax.set_xlabel("Frequency(Hz)", size=10)
-    ax.set_ylabel("Amplitude(dB?)", size=10)
+    ax.set_ylabel("Amplitude(dB)", size=10)
+    ax.grid(linestyle='-', linewidth=0.5)
     ax.axhline(0, color='red', linestyle='-', lw=1)
     line, = ax.plot([], [])
+    line.set_linewidth(1.25)
 
     def update_plot(i):
         if not input_q.empty():
             data = input_q.get()
             freqs = data[0]
             amps = data[1]
-            
+
             line.set_data(freqs, amps)
         return [line]
 
