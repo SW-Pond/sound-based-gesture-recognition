@@ -7,13 +7,20 @@ from matplotlib.animation import FuncAnimation
 
 # CHANGE AS NEEDED
 SAMPLE_RATE = 44100
-INPUT_FRAMES_PER_BUFFER = 4096
-PEAK_MARGIN = 250 # in Hz
-LEFT_OUT_FREQ = 18000 # must be lower than right
+IN_BUFFER_SIZE = 4096
+PEAK_MARGIN = 250 # in Hz; cannot be < 250
+LEFT_OUT_FREQ = 18000 # must be less than right
 RIGHT_OUT_FREQ = 18500
+FILTER_FACTOR = 1.3
 
 # DON'T CHANGE
-FREQ_SPACING = SAMPLE_RATE / INPUT_FRAMES_PER_BUFFER
+FREQ_SPACING = SAMPLE_RATE / IN_BUFFER_SIZE
+# Setting lower bound of interest to the frequency bin corresponding to: LEFT_OUT_FREQ - PEAK_MARGIN
+RANGE_START = int(np.floor((LEFT_OUT_FREQ - PEAK_MARGIN) / FREQ_SPACING))
+# Setting higher bound of interest to the frequency bin corresponding to: RIGHT_OUT_FREQ + PEAK_MARGIN
+RANGE_END = int(np.ceil((RIGHT_OUT_FREQ + PEAK_MARGIN) / FREQ_SPACING))
+LEFT_PEAK_IDX = int(np.ceil(LEFT_OUT_FREQ / FREQ_SPACING))
+RIGHT_PEAK_IDX = int(np.ceil(RIGHT_OUT_FREQ / FREQ_SPACING))
 
 def output_tone():
     out_stream = pyaudio.PyAudio().open(format=pyaudio.paFloat32, channels=2, rate=SAMPLE_RATE, output=True)
@@ -28,43 +35,63 @@ def generate_samples():
     left_samples = np.array( [np.sin(2 * np.pi * LEFT_OUT_FREQ * (i / SAMPLE_RATE)) for i in range(SAMPLE_RATE)] ).astype(np.float32)
     right_samples = np.array( [np.sin(2 * np.pi * RIGHT_OUT_FREQ * (i / SAMPLE_RATE)) for i in range(SAMPLE_RATE)] ).astype(np.float32)
 
+    # Interleaving samples
     for i in range(0, len(samples), 2):
         samples[i] = right_samples[i // 2]
         samples[i + 1] = left_samples[i // 2]
 
+    # Makes samples longer, creating smoother tone
     while(len(samples) / SAMPLE_RATE < 10000):
         samples = np.concatenate((samples, samples), axis=None)
 
     return samples.tobytes()
 
 def get_audio_input(input_q, scan_q):
-    #Setting lower bound of interest to the frequency: LEFT_OUT_FREQ - PEAK_MARGIN
-    RANGE_START = int(np.floor((LEFT_OUT_FREQ - PEAK_MARGIN) / FREQ_SPACING))
-    #Setting higher bound of interest to the frequency: RIGHT_OUT_FREQ + PEAK_MARGIN
-    RANGE_END = int(np.ceil((RIGHT_OUT_FREQ + PEAK_MARGIN) / FREQ_SPACING))
+    in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=SAMPLE_RATE, input=True, frames_per_buffer=IN_BUFFER_SIZE)
 
-    in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=SAMPLE_RATE, input=True, frames_per_buffer=INPUT_FRAMES_PER_BUFFER)
-
-    window = np.hamming(INPUT_FRAMES_PER_BUFFER)
-    freqs = np.linspace(0, SAMPLE_RATE / 2, (INPUT_FRAMES_PER_BUFFER // 2) + 1)
+    window = np.hamming(IN_BUFFER_SIZE)
+    freqs = np.linspace(0, SAMPLE_RATE / 2, (IN_BUFFER_SIZE // 2) + 1)
     freqs = freqs[RANGE_START:RANGE_END]
 
     while True:
-        time_amps = np.frombuffer(in_stream.read(INPUT_FRAMES_PER_BUFFER), dtype=np.int16) * window
-        freq_amps = np.abs(np.fft.rfft(time_amps))
-        freq_dB_amps = 20 * np.log10(freq_amps, where=(freq_amps != 0)) - 50
-
-        freq_dB_amps = freq_dB_amps[RANGE_START:RANGE_END]
-
-        ###########Filter input by scaling up by 1.5 x mean amp and zeroing out values below 30% of that
+        time_amps = np.frombuffer(in_stream.read(IN_BUFFER_SIZE), dtype=np.int16) * window
+        freq_amps = np.abs((np.fft.rfft(time_amps)))
+        freq_dB_amps = to_dB_and_filter(freq_amps)
 
         data = np.vstack((freqs, freq_dB_amps))
         scan_q.put(np.copy(data))
         input_q.put(data)
 
+def to_dB_and_filter(amps): 
+    spectrum_mean = 0
+    non_peak_mean = 0
+
+    for i in range(len(amps)):
+        if amps[i] != 0:
+            amps[i] = 20 * np.log10(amps[i])
+
+        if i != LEFT_PEAK_IDX and i != RIGHT_PEAK_IDX:
+            non_peak_mean += amps[i]
+    non_peak_mean /= (len(amps) - 2)
+
+    for i in range(len(amps)):
+        amps[i] -= non_peak_mean
+        if(amps[i] < 0):
+            amps[i] = 0
+        spectrum_mean += amps[i]
+    spectrum_mean /= len(amps)
+
+    amps = amps[RANGE_START:RANGE_END]
+    
+    for i in range(len(amps)):
+        if amps[i] < spectrum_mean * FILTER_FACTOR:
+            amps[i] = 0
+    
+    return amps
+
 def plot(input_q):
     fig = plt.figure()
-    ax = fig.add_subplot(xlim=(LEFT_OUT_FREQ - PEAK_MARGIN, RIGHT_OUT_FREQ + PEAK_MARGIN), ylim=(-30, 100))
+    ax = fig.add_subplot(xlim=(LEFT_OUT_FREQ - PEAK_MARGIN, RIGHT_OUT_FREQ + PEAK_MARGIN), ylim=(0, 100))
     ax.set_xlabel("Frequency(Hz)", size=10)
     ax.set_ylabel("Amplitude(dB?)", size=10)
     ax.axhline(0, color='red', linestyle='-', lw=1)
