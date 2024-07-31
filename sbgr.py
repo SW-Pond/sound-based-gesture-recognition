@@ -13,6 +13,8 @@ PEAK_MARGIN = 250 # in Hz; cannot be < 250
 LEFT_OUT_FREQ = 18000 # must be less than right
 RIGHT_OUT_FREQ = 18500
 FILTER_FACTOR = 1.3
+BIN_SHIFT_THRESHOLD = 4
+SHIFT_THRESHOLD_FACTOR = 0.3
 
 # DON'T CHANGE
 FREQ_SPACING = SAMPLE_RATE / IN_BUFFER_SIZE
@@ -22,6 +24,9 @@ RANGE_START = int(np.floor((LEFT_OUT_FREQ - PEAK_MARGIN) / FREQ_SPACING))
 RANGE_END = int(np.ceil((RIGHT_OUT_FREQ + PEAK_MARGIN) / FREQ_SPACING))
 LEFT_PEAK_IDX = int(np.ceil(LEFT_OUT_FREQ / FREQ_SPACING))
 RIGHT_PEAK_IDX = int(np.ceil(RIGHT_OUT_FREQ / FREQ_SPACING))
+LOW_SHIFT = -1
+NO_SHIFT = 0
+HIGH_SHIFT = 1
 
 def output_tone():
     out_stream = pyaudio.PyAudio().open(format=pyaudio.paFloat32, channels=2, rate=SAMPLE_RATE, output=True)
@@ -52,7 +57,6 @@ def get_audio_input(input_q, scan_q):
 
     window = np.hamming(IN_BUFFER_SIZE)
     freqs = np.linspace(0, SAMPLE_RATE / 2, (IN_BUFFER_SIZE // 2) + 1)
-    freqs = freqs[RANGE_START:RANGE_END]
 
     while True:
         time_amps = np.frombuffer(in_stream.read(IN_BUFFER_SIZE), dtype=np.int16) * window
@@ -81,8 +85,6 @@ def to_dB_and_filter(amps):
             amps[i] = 0
         spectrum_mean += amps[i]
     spectrum_mean /= len(amps)
-
-    amps = amps[RANGE_START:RANGE_END]
     
     for i in range(len(amps)):
         if amps[i] < spectrum_mean * FILTER_FACTOR:
@@ -111,13 +113,13 @@ def plot(input_q):
     def update_plot(i):
         if not input_q.empty():
             data = input_q.get()
-            freqs = data[0]
-            amps = data[1]
+            freqs = data[0][RANGE_START:RANGE_END]
+            amps = data[1][RANGE_START:RANGE_END]
 
             line.set_data(freqs, amps)
         return [line]
 
-    animated_plot = FuncAnimation(fig=fig, func=update_plot, interval=1, blit=True, cache_frame_data=False)
+    animated_plot = FuncAnimation(fig=fig, func=update_plot, interval=60, blit=True, cache_frame_data=False)
     plt.show()
 
 def scan(scan_q):
@@ -126,37 +128,48 @@ def scan(scan_q):
             data = scan_q.get()
             freqs = data[0]
             amps = data[1]
-            primary_scan(freqs, amps)
+            primary_scan(amps)
 
-######################### 16 bins on either side of peak, not 33
-def primary_scan(freqs, amps):
-    pilot_idx = len(freqs) // 2 - 1
-    pilot_amp = amps[pilot_idx]
-    AMP_SHIFT_THRESHOLD = 0.5 * pilot_amp
-    BIN_SHIFT_THRESHOLD = 4
+def primary_scan(amps):
+    left_scan_res = peak_scan(amps, 0)
+    right_scan_res = peak_scan(amps, 1)
 
-    if amps[pilot_idx] > 60:
-        left_shift_bins = 0
-        right_shift_bins = 0
-        left_idx = pilot_idx - 1
-        right_idx = pilot_idx + 1
+    if left_scan_res == LOW_SHIFT and right_scan_res == LOW_SHIFT:
+        print("Movement away")
 
-        #Left scan
-        while amps[left_idx] > AMP_SHIFT_THRESHOLD and left_idx >= pilot_idx - 33:
-            left_shift_bins += 1
-            left_idx -= 1
-        
-        #Right scan
-        while amps[right_idx] > AMP_SHIFT_THRESHOLD and right_idx <= pilot_idx + 33:
-            right_shift_bins += 1
-            right_idx += 1
+    if left_scan_res == HIGH_SHIFT and right_scan_res == HIGH_SHIFT:
+        print("Movement towards")
 
-        if left_shift_bins > BIN_SHIFT_THRESHOLD or right_shift_bins > BIN_SHIFT_THRESHOLD:
-            if left_shift_bins > right_shift_bins:
-                print("Backward movement")
+    if left_scan_res == LOW_SHIFT and right_scan_res == HIGH_SHIFT:
+        print("Movement right")
 
-            if right_shift_bins > left_shift_bins:
-                print("Forward movement")
+    if left_scan_res == HIGH_SHIFT and right_scan_res == LOW_SHIFT:
+        print("Movement left")
+
+def peak_scan(amps, peak_num):
+    peak_idx = LEFT_PEAK_IDX if peak_num == 0 else RIGHT_PEAK_IDX
+    shift_threshold = SHIFT_THRESHOLD_FACTOR * amps[peak_idx]
+    scan_res = NO_SHIFT
+
+    low_shift_bins = 0
+    high_shift_bins = 0
+    low_idx = peak_idx - 1
+    high_idx = peak_idx + 1
+
+    # Scan left of peak
+    while amps[low_idx] > shift_threshold and low_idx >= peak_idx - 16:
+        low_shift_bins += 1
+        low_idx -= 1
+
+    # Scan right of peak
+    while amps[high_idx] > shift_threshold and high_idx <= peak_idx + 16:
+        high_shift_bins += 1
+        high_idx += 1
+    
+    if low_shift_bins > BIN_SHIFT_THRESHOLD or high_shift_bins > BIN_SHIFT_THRESHOLD:
+        scan_res = LOW_SHIFT if low_shift_bins > high_shift_bins else HIGH_SHIFT
+    
+    return scan_res
 
 def secondary_scan():
     return 0
