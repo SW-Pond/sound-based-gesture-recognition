@@ -48,16 +48,6 @@ class VelocityAnalyzer:
         return v_vec
 
     def peak_scan(self, amps, peak):
-        """
-        ToDo:
-            Use MAG of freq shift to determine v (subtract left shift from right shift); may need to 
-            define each shift as the difference in freq between current time series sequence and last.
-            
-            May need to define each shift as starting from the edge frequency bins of the peak tones.
-            
-            May need to scale left/right vectors to have similar vector mag as forward/back movement.
-        """
-
         peak_idx = 0
         speaker_angle = 0
         speaker_freq = 0
@@ -108,6 +98,7 @@ class VelocityAnalyzer:
     def plot(self):
         fig = plt.figure()
         ax = fig.add_subplot(xlim=(-10, 10), ylim=(-10, 10), xticks=[], yticks=[])
+        ax.set_title("Velocity Plot")
         line, = ax.plot([], [])
         line.set_linewidth(1.25)
         v_x_vals = [0]

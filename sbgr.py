@@ -1,10 +1,12 @@
 import multiprocessing as mp
 import velocity
 import audio
+from jackknife.query import QueryMgr
+
 
 LOW_FREQ = 18000
 HIGH_FREQ = 18500
-IN_BUFFER_SIZE = 4410
+IN_BUFFER_SIZE = 4096
 SAMPLE_RATE = 44100
 
 FREQ_BIN_RES = SAMPLE_RATE / IN_BUFFER_SIZE
@@ -12,10 +14,11 @@ FREQ_BIN_RES = SAMPLE_RATE / IN_BUFFER_SIZE
 if __name__ == "__main__":
     input_queue = mp.Queue()
     velocity_queue = mp.Queue()
+    query_mgr = QueryMgr()
 
     output_tones = audio.Output(low_freq=LOW_FREQ, high_freq=HIGH_FREQ, sample_rate=SAMPLE_RATE)
     audio_in = audio.Input(input_queue=input_queue, buffer_size=IN_BUFFER_SIZE, sample_rate=SAMPLE_RATE, 
-                           peak_freqs=(LOW_FREQ, HIGH_FREQ), f_bin_res=FREQ_BIN_RES)
+                           peak_freqs=(LOW_FREQ, HIGH_FREQ), f_bin_res=FREQ_BIN_RES, query_mgr=query_mgr)
     velocity_analyzer = velocity.VelocityAnalyzer(f_domain_q=input_queue, v_q=velocity_queue, 
                                                   peak_freqs=(LOW_FREQ, HIGH_FREQ), f_bin_res=FREQ_BIN_RES)
 

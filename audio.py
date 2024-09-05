@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import keyboard
 import pyaudio
+import time
 from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import MultipleLocator
 from multiprocessing import Queue
@@ -40,17 +42,23 @@ class Output:
 
 
 class Input:
-    def __init__(self, input_queue, buffer_size, sample_rate, peak_freqs, f_bin_res):
+    def __init__(self, input_queue, buffer_size, sample_rate, peak_freqs, f_bin_res, query_mgr):
+        # Might need to raise FILTER_FACTOR to eliminate noise
         self.FILTER_FACTOR = 1.3
+        self.POINT_POLLING_RATE = 40 # In Hz
+        self.POINT_POLLING_INTERVAL = 1 / self.POINT_POLLING_RATE
 
-        self.plot_q = Queue()
         self.in_q = input_queue
         self.buffer_size = buffer_size
         self.sample_rate = sample_rate
         self.l_f = np.min(peak_freqs)
         self.r_f = np.max(peak_freqs)
         self.f_bin_res = f_bin_res
-    
+        self.query_mgr = query_mgr
+        self.l_f_bin = int(np.round(self.l_f / self.f_bin_res))
+        self.r_f_bin = int(np.round(self.r_f / self.f_bin_res))
+        self.plot_q = Queue()
+
     # Gets input in freq domain
     def get(self):
         in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=self.sample_rate, 
@@ -59,10 +67,47 @@ class Input:
         window = windows.blackmanharris(self.buffer_size)
         freqs = np.linspace(0, self.sample_rate / 2, (self.buffer_size // 2) + 1)
 
+        per_second_poll_count = 0
+        last_poll_time = time.time()
+        start_time = time.time()
+
         while True:
             t_domain_amps = np.frombuffer(in_stream.read(self.buffer_size), dtype=np.int16) * window
             f_domain_amps = np.abs((np.fft.rfft(t_domain_amps)))
             f_domain_dB_amps = self.to_dB_and_filter(f_domain_amps)
+            
+            curr_time = time.time()
+            elapsed_time = curr_time - start_time
+            
+            if elapsed_time >= 1:
+                #print("Point polls per second: " + str(per_second_poll_count))
+                per_second_poll_count = 0
+                start_time = curr_time
+
+            # Create current point and pass to query manager
+            if curr_time - last_poll_time >= self.POINT_POLLING_INTERVAL:
+                f_domain_vec = np.copy(f_domain_dB_amps)
+
+                l_f_domain_vec = f_domain_vec[self.l_f_bin - 16 : self.l_f_bin + 17]
+                r_f_domain_vec = f_domain_vec[self.r_f_bin - 16 : self.r_f_bin + 17]
+
+                self.normalize(l_f_domain_vec)
+                self.normalize(r_f_domain_vec)
+
+                point = np.concatenate((l_f_domain_vec, r_f_domain_vec))
+
+                self.query_mgr.pass_point(point=point, last_in_curr_query=False)
+                
+                per_second_poll_count += 1
+                last_poll_time = curr_time
+
+            # Start recording points as a template instead of a query
+            if keyboard.is_pressed('t'):
+                self.query_mgr.add_to_template()
+
+            keyboard.on_press(self.query_mgr.check_pressed_key)
+            # For stopping indefinite key press event
+            keyboard.on_release(lambda _:_)
 
             data = np.vstack((freqs, f_domain_dB_amps))
 
@@ -95,6 +140,15 @@ class Input:
 
         return amps
 
+    def normalize(self, vector):
+        if not len(vector) == 0:
+            max = np.max(vector)
+
+            # Avoid division by 0
+            if max != 0:
+                for i in range(len(vector)):
+                    vector[i] /= max
+
     def plot(self):
         PEAK_MARGIN = 250
         MIN_F = self.l_f - PEAK_MARGIN
@@ -104,6 +158,7 @@ class Input:
 
         fig = plt.figure()
         ax = fig.add_subplot(xlim=(MIN_F, MAX_F), ylim=(0, 100))
+        ax.set_title("Frequency Spectrum Plot")
         ax.xaxis.set_minor_locator(MultipleLocator(25))
         ax.xaxis.set_major_locator(MultipleLocator(250))
         ax.xaxis.set_tick_params(which='minor', length=3, width=0.75)
