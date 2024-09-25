@@ -1,11 +1,8 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FuncAnimation
-from multiprocessing import Queue
 
 
 class VelocityAnalyzer:
-    def __init__(self, f_bin_res, peak_freqs, f_domain_q, v_q):
+    def __init__(self, f_domain_q, v_plot_q, f_bin_res, peak_freqs):
         self.C = 343 # Speed of sound in air (m/s)
         # Constants for defining what constitutes detected movement
         self.MIN_FREQ_SHIFT = 30
@@ -22,8 +19,7 @@ class VelocityAnalyzer:
         self.l_f_idx = int(np.round(self.l_f / self.f_bin_res))
         self.r_f_idx = int(np.round(self.r_f / self.f_bin_res))
         self.f_domain_q = f_domain_q
-        self.v_q = v_q
-        self.plot_q = Queue()
+        self.v_plot_q = v_plot_q
 
     def get_v(self):
         while True:
@@ -34,8 +30,7 @@ class VelocityAnalyzer:
 
                 v_vec = self.scan(amps)
 
-                self.plot_q.put(np.copy(v_vec))
-                self.v_q.put(v_vec)
+                self.v_plot_q.put(v_vec)
 
     def scan(self, amps):
         l_v_vec = self.peak_scan(amps, 'L')
@@ -94,34 +89,3 @@ class VelocityAnalyzer:
         v_vec = [v_x, v_y]
 
         return v_vec
-
-    def plot(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(xlim=(-10, 10), ylim=(-10, 10), xticks=[], yticks=[])
-        ax.set_title("Velocity Plot")
-        line, = ax.plot([], [])
-        line.set_linewidth(1.25)
-        v_x_vals = [0]
-        v_y_vals = [0]
-
-        def update_plot(i):
-            nonlocal v_x_vals, v_y_vals
-            if not self.plot_q.empty():
-                velocity = self.plot_q.get()
-                v_x = velocity[0]
-                v_y = velocity[1]
-
-                if v_x == 0 and v_y == 0:
-                    v_x_vals = [0]
-                    v_y_vals = [0]
-                
-                else:
-                    v_x_vals.append(v_x + v_x_vals[-1])
-                    v_y_vals.append(v_y + v_y_vals[-1])
-
-            line.set_data(v_x_vals, v_y_vals)
-            return [line]
-
-        animated_plot = FuncAnimation(fig=fig, func=update_plot, interval=0, 
-                                      blit=True, cache_frame_data=False)
-        plt.show()
