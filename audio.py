@@ -64,19 +64,19 @@ class Input:
             f_domain_amps = np.abs((np.fft.rfft(t_domain_amps)))
             f_domain_dB_amps = self.to_dB_and_filter(f_domain_amps)
 
-            # Create current point and pass to query manager
+            # Create current point and pass to data manager
             f_domain_vec = np.copy(f_domain_dB_amps)
 
             l_f_domain_vec = f_domain_vec[self.l_f_bin - 16 : self.l_f_bin + 17]
             r_f_domain_vec = f_domain_vec[self.r_f_bin - 16 : self.r_f_bin + 17]
 
-            self.rescale(l_f_domain_vec)
-            self.rescale(r_f_domain_vec)
+            self.normalize(l_f_domain_vec)
+            self.normalize(r_f_domain_vec)
 
             point = np.concatenate((l_f_domain_vec, r_f_domain_vec))
 
             self.data_mgr.pass_point(point)
-
+            
             keyboard.on_press(self.data_mgr.check_pressed_key)
             # Stop indefinite key press event
             keyboard.on_release(lambda _:_)
@@ -113,7 +113,7 @@ class Input:
         return amps
 
     # Rescale vector components to range [0,1]
-    def rescale(self, vector):
+    def normalize(self, vector):
         if not len(vector) == 0:
             max = np.max(vector)
 
