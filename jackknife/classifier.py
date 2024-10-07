@@ -1,22 +1,18 @@
 import numpy as np
+import time
 import csv
 from . import data_utils as d_u
-from queue import Queue
 from . import data
+
 
 # gpdvs := gesture path direction vectors
 class Classifier:
     def __init__(self, pipe_conn):
         # Number of points to add to the query for each dtw check against
         #  all templates
-        self.ADDITIONAL_POINTS = 5
         self.pipe_conn = pipe_conn
         self.gesture_templates = self.get_all_templates()
 
-        """
-        Resample templates, convert to gpdvs, envelop for lower bound and
-        extract features for correction factors
-        """
         for gest_type in self.gesture_templates:
             for template in gest_type:
                 template.points = d_u.resample(template.points)
@@ -49,65 +45,72 @@ class Classifier:
         return templates   
     
     def classify(self):
+        best_score = np.inf
+        best_match = None
+        prev_best_match = None
+        prev2_best_match = None
+
         while True:
-            # Request new points from data manager
+            """
+            When ready to process a new query, notify data manager and block 
+            until a list of points is received.
+            """
             self.pipe_conn.send(1)
-            # Blocks until data manager replies with num_points it will send
-            num_points = self.pipe_conn.recv()
+            recvd_points = self.pipe_conn.recv()
 
-            # Data manager ready to send to points
-            if num_points != 0:
-                recvd_points = Queue()
-                query = data.Query()
-
-                for i in range(num_points):
-                    recvd_points.put(self.pipe_conn.recv())
+            query = data.Query()
+            query.points = recvd_points
                 
-                """
-                Adds next ADDITIONAL_POINTS from received points (from data
-                manager, in the order they were received) to query, then 
-                resamples all query points and checks them against all 
-                templates.
-                """
-                for points in range(num_points // self.ADDITIONAL_POINTS):
-                    for addtl_points in range(self.ADDITIONAL_POINTS):
-                        query.add_point(recvd_points.get())
-                    
+            query.points = d_u.resample(query.points)
+            query.gpdvs = d_u.to_gpdvs(query.points)
+            query.extract_features()
+
+            classified = False
+            for i in range(1):    
+            #for i in range(d_u.TEMPLATES_PER_GESTURE):
+                for j in range(d_u.NUM_GESTURES):
+                    template = self.gesture_templates[j][i]
+                    gesture_name = template.name
+
+                    score = 1
+                    correction_factors = self.correction_factors(template,
+                                                                 query)
+                    for factor in correction_factors:
+                        score *= factor
                     """
-                    Resample query points, convert to gpdvs and extract
-                    features for correction factors
+                    # Skip DTW check if last best score is lower than
+                    # best possible score for query and current template
+                    lower_bound = self.lower_bound(template, query) * score
+                    if best_score < lower_bound:
+                        continue
                     """
-                    query.points = d_u.resample(query.points)
-                    query.gpdvs = d_u.to_gpdvs(query.points)
-                    query.extract_features()
-
-                    for i in range(1):    
-                    #for i in range(d_u.TEMPLATES_PER_GESTURE):
-                        for j in range(d_u.NUM_GESTURES):
-                            template = self.gesture_templates[j][i]
-                            gesture_name = template.name
-
-                            lower_bound = self.lower_bound(template, query)
-                            # Skip dtw check if current best score is lower than
-                            # best possible score for query and current template
-                            if query.best_score < lower_bound:
-                                continue
-                  
-                            score = self.dtw(template.gpdvs, query.gpdvs)
-                            
-                            correction_factors = self.correction_factors(template,
-                                                                    query)
-                            num_correction_factors = len(correction_factors)
-                            for i in range(num_correction_factors):
-                                score *= correction_factors[i]
-
-                            # Using argmin of dtw for best gesture match
-                            if score < query.best_score:
-                                query.best_score = score
-                                query.best_gest_name = gesture_name
+                    score *= self.dtw(template.gpdvs, query.gpdvs)
                     
-                print(query.best_gest_name)
+                    # Using argmin of DTW for best gesture match
+                    if score < best_score:
+                        best_score = score
+                        best_match = gesture_name
 
+                        if best_match == prev_best_match and \
+                           prev_best_match == prev2_best_match:
+                            classified = True
+                            break
+
+                if classified:
+                    print(best_match)
+                    best_match = None
+                    prev_best_match = None
+                    prev2_best_match = None
+                    time.sleep(2)
+                    # Notify data manager that a gesture has been detected
+                    self.pipe_conn.send(2)
+                    break
+        
+            prev2_best_match = prev_best_match
+            prev_best_match = best_match
+
+            # Reset for next query
+            best_score = np.inf
 
     def lower_bound(self, template, query):
         num_vecs = len(template.gpdvs)
@@ -157,6 +160,7 @@ class Classifier:
             factor = 1
             feature_inner_product = np.inner(template.features[i], 
                                              query.features[i])
+            
             # Handles division by 0
             if feature_inner_product != 0:
                 factor = 1 / feature_inner_product

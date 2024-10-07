@@ -9,8 +9,6 @@ class Gesture:
         self.points = []
         self.gpdvs = []
         self.features = []
-        self.best_score = np.inf
-        self.best_gest_name = ""
 
     def add_point(self, point):
         self.points.append(point)
@@ -19,7 +17,7 @@ class Gesture:
         num_vecs = len(self.gpdvs)
         components_per_vec = len(self.gpdvs[0])
         # Per component absolute distance traveled in gesture path
-        abs_dist_vec = np.full(components_per_vec, 0)
+        abs_dist_vec = np.zeros(components_per_vec)
         bb_max = np.copy(self.points[0])
         bb_min = np.copy(self.points[0])
 
@@ -53,7 +51,8 @@ class Template(Gesture):
     def __init__(self, name=""):
         super().__init__()
         self.name = name
-        # Upper and lower bands for lower bounding dtw
+
+        # Upper and lower bands for determing lowest possible DTW score
         self.upper = []
         self.lower = []
 
@@ -73,7 +72,7 @@ class Template(Gesture):
             self.upper.append(maximum)
             self.lower.append(minimum)
 
-    # For logging new templates (different from add_point)
+    # For template logging only
     def record_point(self, point):
         if len(self.points) == 0 or point is not self.points[-1]:
             self.add_point(point)
@@ -114,27 +113,49 @@ class Template(Gesture):
 class Manager:
     def __init__(self, pipe_conn):
         self.pipe_conn = pipe_conn
-        self.curr_template = Template()
-        self.curr_point = []
+        # Flag for communicating with classifier through pipe; 
+        #   default ==> do nothing
+        self.FLAG_DEFAULT = 0
+        self.flag = self.FLAG_DEFAULT
+
         self.MAX_HISTORY_POINTS = 25
         self.point_history = deque(maxlen=self.MAX_HISTORY_POINTS)
+
+        self.WINDOW_INCREMENT = 5
+        self.INIT_WINDOW_SIZE = 5
+        self.window_size = self.INIT_WINDOW_SIZE
+
+        # For template logging only
+        self.curr_template = Template()
+        self.curr_point = []
     
     def pass_point(self, point):
         self.curr_point = np.copy(point)
         self.point_history.append(point)
-
-        # If classifier is ready for new points
+        
         if self.pipe_conn.poll():
-            if (self.pipe_conn.recv() == 1 and 
-                len(self.point_history) == self.MAX_HISTORY_POINTS):
-                # Send MAX_HISTORY_POINTS so classifier knows num to expect
-                self.pipe_conn.send(self.MAX_HISTORY_POINTS)
-                while len(self.point_history) != 0:
-                    latest_point = self.point_history.pop()
-                    self.pipe_conn.send(latest_point)
-            else:
-                # Not ready to send points
-                self.pipe_conn.send(0)
+            self.flag = self.pipe_conn.recv()
+
+        # If classifier is ready and there are enough points in history
+        if self.flag == 1 and len(self.point_history) >= self.window_size:
+            window_points = []
+            window_end = len(self.point_history)
+            for i in range(window_end - self.window_size, window_end):
+                window_points.append(self.point_history[i])
+
+            self.pipe_conn.send(window_points)
+
+            self.window_size += self.WINDOW_INCREMENT
+
+            self.flag = self.FLAG_DEFAULT
+
+        # If classifier found a match or no match was found after
+        #   it processed self.MAX_HISTORY_POINTS
+        if self.flag == 2 or self.window_size > self.MAX_HISTORY_POINTS:
+            # Reset for new gesture
+            self.window_size = self.INIT_WINDOW_SIZE
+            self.point_history.clear()
+            self.flag = self.FLAG_DEFAULT
 
     def check_pressed_key(self, key_event):
         key = key_event.name
