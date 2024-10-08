@@ -45,12 +45,10 @@ class Classifier:
         return templates   
     
     def classify(self):
-        best_score = np.inf
-        best_match = None
-        prev_best_match = None
-        prev2_best_match = None
-
         while True:
+            best_score = np.inf
+            best_match_name = None
+
             """
             When ready to process a new query, notify data manager and block 
             until a list of points is received.
@@ -65,7 +63,6 @@ class Classifier:
             query.gpdvs = d_u.to_gpdvs(query.points)
             query.extract_features()
 
-            classified = False
             for i in range(1):    
             #for i in range(d_u.TEMPLATES_PER_GESTURE):
                 for j in range(d_u.NUM_GESTURES):
@@ -77,6 +74,8 @@ class Classifier:
                                                                  query)
                     for factor in correction_factors:
                         score *= factor
+
+                    # TODO: Fix lower bound calculation
                     """
                     # Skip DTW check if last best score is lower than
                     # best possible score for query and current template
@@ -84,33 +83,19 @@ class Classifier:
                     if best_score < lower_bound:
                         continue
                     """
+
                     score *= self.dtw(template.gpdvs, query.gpdvs)
                     
                     # Using argmin of DTW for best gesture match
                     if score < best_score:
                         best_score = score
-                        best_match = gesture_name
+                        best_match_name = gesture_name
 
-                        if best_match == prev_best_match and \
-                           prev_best_match == prev2_best_match:
-                            classified = True
-                            break
+            best_match = [best_score, best_match_name]
 
-                if classified:
-                    print(best_match)
-                    best_match = None
-                    prev_best_match = None
-                    prev2_best_match = None
-                    time.sleep(2)
-                    # Notify data manager that a gesture has been detected
-                    self.pipe_conn.send(2)
-                    break
-        
-            prev2_best_match = prev_best_match
-            prev_best_match = best_match
-
-            # Reset for next query
-            best_score = np.inf
+            # Notify data manager that classification is done and send match
+            self.pipe_conn.send(2)
+            self.pipe_conn.send(best_match)
 
     def lower_bound(self, template, query):
         num_vecs = len(template.gpdvs)

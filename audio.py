@@ -75,7 +75,7 @@ class Input:
 
             point = np.concatenate((l_f_domain_vec, r_f_domain_vec))
 
-            self.data_mgr.pass_point(point)
+            self.data_mgr.process_point(point)
             
             keyboard.on_press(self.data_mgr.check_pressed_key)
             # Stop indefinite key press event

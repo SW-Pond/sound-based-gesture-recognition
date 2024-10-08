@@ -1,7 +1,7 @@
 import numpy as np
 import csv
-from collections import deque
 from . import data_utils as d_u
+from collections import deque
 
 
 class Gesture:
@@ -16,7 +16,7 @@ class Gesture:
     def extract_features(self):
         num_vecs = len(self.gpdvs)
         components_per_vec = len(self.gpdvs[0])
-        # Per component absolute distance traveled in gesture path
+        # Per-component absolute distance traveled in gesture path
         abs_dist_vec = np.zeros(components_per_vec)
         bb_max = np.copy(self.points[0])
         bb_min = np.copy(self.points[0])
@@ -25,7 +25,7 @@ class Gesture:
             for j in range(components_per_vec):
                 abs_dist_vec[j] += np.abs(self.gpdvs[i][j])
 
-                # Using i + 1 for bb vectors since points will always have one
+                # Using i + 1 for points since points will always have one
                 #  more than gpdvs
                 bb_max[j] = max(bb_max[j], self.points[i + 1][j])
                 bb_min[j] = min(bb_min[j], self.points[i + 1][j])
@@ -52,7 +52,7 @@ class Template(Gesture):
         super().__init__()
         self.name = name
 
-        # Upper and lower bands for determing lowest possible DTW score
+        # Upper and lower bands for determining lowest possible DTW score
         self.upper = []
         self.lower = []
 
@@ -75,6 +75,7 @@ class Template(Gesture):
     # For template logging only
     def record_point(self, point):
         if len(self.points) == 0 or point is not self.points[-1]:
+            print(f"Recording point {len(self.points)}")
             self.add_point(point)
 
     def log(self, g_key):
@@ -86,7 +87,6 @@ class Template(Gesture):
             log_file_path = f"{dir}t{log_file_num}.csv"
 
             with open(log_file_path, "r+", newline='') as log_file:
-                # If file is empty
                 if log_file.read(1) == '':
                     print(f"Logging template {log_file_num + 1} for gesture: "
                           f"{gesture_type} ...")
@@ -113,8 +113,8 @@ class Template(Gesture):
 class Manager:
     def __init__(self, pipe_conn):
         self.pipe_conn = pipe_conn
-        # Flag for communicating with classifier through pipe; 
-        #   default ==> do nothing
+        # Flag for communicating with classifier through pipe;
+        #   FLAG_DEFAULT ==> do nothing
         self.FLAG_DEFAULT = 0
         self.flag = self.FLAG_DEFAULT
 
@@ -128,11 +128,16 @@ class Manager:
         # For template logging only
         self.curr_template = Template()
         self.curr_point = []
-    
-    def pass_point(self, point):
+
+        # For these, first element is the score, second is the gesture name
+        self.scnd_last_best_match = None
+        self.last_best_match = None
+        self.best_match = None
+
+    def process_point(self, point):
         self.curr_point = np.copy(point)
         self.point_history.append(point)
-        
+
         if self.pipe_conn.poll():
             self.flag = self.pipe_conn.recv()
 
@@ -140,22 +145,44 @@ class Manager:
         if self.flag == 1 and len(self.point_history) >= self.window_size:
             window_points = []
             window_end = len(self.point_history)
+
             for i in range(window_end - self.window_size, window_end):
                 window_points.append(self.point_history[i])
-
+                
             self.pipe_conn.send(window_points)
 
             self.window_size += self.WINDOW_INCREMENT
 
             self.flag = self.FLAG_DEFAULT
 
-        # If classifier found a match or no match was found after
-        #   it processed self.MAX_HISTORY_POINTS
-        if self.flag == 2 or self.window_size > self.MAX_HISTORY_POINTS:
-            # Reset for new gesture
-            self.window_size = self.INIT_WINDOW_SIZE
-            self.point_history.clear()
-            self.flag = self.FLAG_DEFAULT
+        # If classifier is done with latest window
+        if self.flag == 2:
+            match = self.pipe_conn.recv()
+            
+            if self.best_match == None:
+                self.best_match = match
+
+            elif match[0] < self.best_match[0]:
+                self.best_match = match
+            
+            if self.window_size > self.MAX_HISTORY_POINTS:
+                self.window_size = self.INIT_WINDOW_SIZE
+
+                if self.last_best_match != None and \
+                   self.scnd_last_best_match != None:
+                    
+                    if self.best_match[1] == self.last_best_match[1] and \
+                    self.last_best_match[1] == self.scnd_last_best_match[1]:
+                        
+                        print(self.best_match[1])
+                        self.scnd_last_best_match = None
+                        self.last_best_match = None
+                        self.best_match = None
+                        #self.point_history.clear()
+                        
+                self.scnd_last_best_match = self.last_best_match
+                self.last_best_match = self.best_match
+                self.best_match = None
 
     def check_pressed_key(self, key_event):
         key = key_event.name
