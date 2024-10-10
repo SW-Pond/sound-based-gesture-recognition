@@ -12,7 +12,9 @@ class Output:
         self.samples = self.generate_samples()
         
     def start(self):
-        out_stream = pyaudio.PyAudio().open(format=pyaudio.paFloat32, channels=2, rate=self.sample_rate, output=True)
+        out_stream = pyaudio.PyAudio().open(format=pyaudio.paFloat32, 
+                                            channels=2, rate=self.sample_rate, 
+                                            output=True)
         
         while True:
             out_stream.write(self.samples)
@@ -53,14 +55,16 @@ class Input:
 
     # Gets input in freq domain
     def get(self):
-        in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=self.sample_rate, 
-                                           input=True, frames_per_buffer=self.buffer_size)
+        in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, 
+                                           rate=self.sample_rate, input=True, 
+                                           frames_per_buffer=self.buffer_size)
 
         window = windows.blackmanharris(self.buffer_size)
         freqs = np.linspace(0, self.sample_rate / 2, (self.buffer_size // 2) + 1)
 
         while True:
-            t_domain_amps = np.frombuffer(in_stream.read(self.buffer_size), dtype=np.int16) * window
+            t_domain_amps = np.frombuffer(in_stream.read(self.buffer_size), 
+                                          dtype=np.int16) * window
             f_domain_amps = np.abs((np.fft.rfft(t_domain_amps)))
             f_domain_dB_amps = self.to_dB_and_filter(f_domain_amps)
 

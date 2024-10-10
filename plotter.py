@@ -2,15 +2,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import MultipleLocator
+import matplotlib.gridspec as gs
 
 class Plotter:
-    def __init__(self, in_plot_q, v_plot_q, low_freq, high_freq, f_bin_res):
+    def __init__(self, in_plot_q, v_plot_q, res_q, 
+                 low_freq, high_freq, f_bin_res):
         self.in_plot_q = in_plot_q
         self.v_plot_q = v_plot_q
+        self.res_q = res_q
         self.low_freq = low_freq
         self.high_freq = high_freq
         self.f_bin_res = f_bin_res
-        self.containing_fig = plt.figure(figsize=(12, 5))
+
+        self.fig = plt.figure(figsize=(12,6))
+        self.gs = gs.GridSpec(2, 2, height_ratios=[100, 1])
+
         self.PEAK_MARGIN_F = 250
         self.MIN_PLOT_F = self.low_freq - self.PEAK_MARGIN_F
         self.MAX_PLOT_F = self.high_freq + self.PEAK_MARGIN_F
@@ -19,13 +25,18 @@ class Plotter:
 
     def plot_all(self):
         f_spec_line = self.init_f_spec_plot()
-
         v_line = self.init_v_plot()
+
+        results_ax = self.fig.add_axes([0.1, 0.03, 0.8, 0.1])
+        results_ax.axis('off')
+        gesture = results_ax.text(0.31, 0.01, "", ha='left', va='bottom', fontsize=15)
+        score = results_ax.text(0.53, 0.01, "", ha='left', va='bottom', fontsize=15)
+
         # Start velocity line at origin
         v_x_vals = [0]
         v_y_vals = [0]
 
-        def update_plot(i):
+        def update_plots(i):
             if not self.in_plot_q.empty():
                 data = self.in_plot_q.get()
                 freqs = data[0][self.MIN_F_IDX : self.MAX_F_IDX + 1]
@@ -50,19 +61,26 @@ class Plotter:
                     v_y_vals.append(v_y + v_y_vals[-1])
 
                 v_line.set_data(v_x_vals, v_y_vals)
+        
+            if not self.res_q.empty():
+                result = self.res_q.get()
 
-            return f_spec_line, v_line
+                gesture.set_text(f"Gesture: {result[1]}")
+                score.set_text(f"Score: {result[0]:.2f}")
+            
+            return f_spec_line, v_line, gesture, score
 
-        animated_plot = FuncAnimation(fig=self.containing_fig, func=update_plot, 
-                                      interval=60, blit=True, cache_frame_data=False)
+        animated_plot = FuncAnimation(fig=self.fig, func=update_plots, 
+                                      interval=55, blit=True, 
+                                      cache_frame_data=False)
         
         plt.show()
 
     # Returns line associated with freq spectrum subplot
     def init_f_spec_plot(self):
-        ax = self.containing_fig.add_subplot(1, 2, 1, 
-                                             xlim=(self.MIN_PLOT_F, self.MAX_PLOT_F), 
-                                             ylim=(0, 100))
+        ax = self.fig.add_subplot(self.gs[0,0], 
+                                  xlim=(self.MIN_PLOT_F, self.MAX_PLOT_F), 
+                                  ylim=(0, 100))
         ax.set_title("Frequency Spectrum")
         ax.xaxis.set_minor_locator(MultipleLocator(25))
         ax.xaxis.set_major_locator(MultipleLocator(250))
@@ -83,9 +101,8 @@ class Plotter:
 
     # Returns line associated with velocity subplot
     def init_v_plot(self):
-        ax = self.containing_fig.add_subplot(1, 2, 2, 
-                                             xlim=(-10, 10), ylim=(-10, 10), 
-                                             xticks=[], yticks=[])
+        ax = self.fig.add_subplot(self.gs[0,1], xlim=(-10, 10), ylim=(-10, 10), 
+                                  xticks=[], yticks=[])
         ax.set_title("Velocity")
         line, = ax.plot([], [])
         line.set_linewidth(1.25)

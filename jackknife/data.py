@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import csv
 from . import data_utils as d_u
 from collections import deque
@@ -26,7 +27,7 @@ class Gesture:
                 abs_dist_vec[j] += np.abs(self.gpdvs[i][j])
 
                 # Using i + 1 for points since points will always have one
-                #  more than gpdvs
+                # more than gpdvs
                 bb_max[j] = max(bb_max[j], self.points[i + 1][j])
                 bb_min[j] = min(bb_min[j], self.points[i + 1][j])
 
@@ -111,19 +112,18 @@ class Template(Gesture):
 
 
 class Manager:
-    def __init__(self, pipe_conn):
+    def __init__(self, pipe_conn, res_q):
         self.pipe_conn = pipe_conn
-        # Flag for communicating with classifier through pipe;
-        #   FLAG_DEFAULT ==> do nothing
+
+        self.res_q = res_q
+
+        # For communicating with classifier through pipe;
+        # FLAG_DEFAULT ==> do nothing
         self.FLAG_DEFAULT = 0
         self.flag = self.FLAG_DEFAULT
 
         self.MAX_HISTORY_POINTS = 25
         self.point_history = deque(maxlen=self.MAX_HISTORY_POINTS)
-
-        self.WINDOW_INCREMENT = 5
-        self.INIT_WINDOW_SIZE = 5
-        self.window_size = self.INIT_WINDOW_SIZE
 
         # For template logging only
         self.curr_template = Template()
@@ -134,28 +134,18 @@ class Manager:
         self.last_best_match = None
         self.best_match = None
 
+        self.BETWEEN_GESTURE_DELAY = 2 # Seconds to wait between gestures
+        self.timerStart = 0
+
     def process_point(self, point):
         self.curr_point = np.copy(point)
         self.point_history.append(point)
 
+        # Check status of classifier
         if self.pipe_conn.poll():
             self.flag = self.pipe_conn.recv()
 
-        # If classifier is ready and there are enough points in history
-        if self.flag == 1 and len(self.point_history) >= self.window_size:
-            window_points = []
-            window_end = len(self.point_history)
-
-            for i in range(window_end - self.window_size, window_end):
-                window_points.append(self.point_history[i])
-                
-            self.pipe_conn.send(window_points)
-
-            self.window_size += self.WINDOW_INCREMENT
-
-            self.flag = self.FLAG_DEFAULT
-
-        # If classifier is done with latest window
+        # If classifier is done
         if self.flag == 2:
             match = self.pipe_conn.recv()
             
@@ -164,25 +154,47 @@ class Manager:
 
             elif match[0] < self.best_match[0]:
                 self.best_match = match
-            
-            if self.window_size > self.MAX_HISTORY_POINTS:
-                self.window_size = self.INIT_WINDOW_SIZE
 
-                if self.last_best_match != None and \
-                   self.scnd_last_best_match != None:
+            if self.last_best_match != None and \
+               self.scnd_last_best_match != None:
+
+                # If a match has persisted over three frames
+                if self.best_match[1] == self.last_best_match[1] and \
+                   self.last_best_match[1] == self.scnd_last_best_match[1]:
                     
-                    if self.best_match[1] == self.last_best_match[1] and \
-                    self.last_best_match[1] == self.scnd_last_best_match[1]:
-                        
-                        print(self.best_match[1])
-                        self.scnd_last_best_match = None
-                        self.last_best_match = None
-                        self.best_match = None
-                        #self.point_history.clear()
-                        
-                self.scnd_last_best_match = self.last_best_match
-                self.last_best_match = self.best_match
-                self.best_match = None
+                    self.res_q.put(self.best_match)
+
+                    self.scnd_last_best_match = None
+                    self.last_best_match = None
+                    self.best_match = None
+
+                    self.point_history.clear()
+
+                    self.timerStart = time.time()
+
+                    # Do not send current points to classifier
+                    self.flag = self.FLAG_DEFAULT
+                
+                # If a match has not persisted over three frames, send
+                # current points to classifier
+                else:
+                    # Since last flag was 2 (classifier is done with last
+                    # points), recv() will not block and this flag will always
+                    # be 1
+                    self.flag = self.pipe_conn.recv()
+                    
+            self.scnd_last_best_match = self.last_best_match
+            self.last_best_match = self.best_match
+            self.best_match = None
+
+        # If classifier is ready, the minimum delay between gestures has 
+        # passed, and there are enough points in history
+        if self.flag == 1 and \
+           time.time() - self.timerStart >= self.BETWEEN_GESTURE_DELAY and \
+           len(self.point_history) == self.MAX_HISTORY_POINTS:
+            self.pipe_conn.send(self.point_history)
+
+            self.flag = self.FLAG_DEFAULT
 
     def check_pressed_key(self, key_event):
         key = key_event.name

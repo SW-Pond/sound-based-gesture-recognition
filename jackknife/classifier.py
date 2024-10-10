@@ -1,5 +1,4 @@
 import numpy as np
-import time
 import csv
 from . import data_utils as d_u
 from . import data
@@ -9,7 +8,7 @@ from . import data
 class Classifier:
     def __init__(self, pipe_conn):
         # Number of points to add to the query for each dtw check against
-        #  all templates
+        # all templates
         self.pipe_conn = pipe_conn
         self.gesture_templates = self.get_all_templates()
 
@@ -45,51 +44,62 @@ class Classifier:
         return templates   
     
     def classify(self):
+        INIT_WINDOW_SIZE = 5
+        WINDOW_INCREMENT = 5
+        
         while True:
             best_score = np.inf
             best_match_name = None
 
             """
-            When ready to process a new query, notify data manager and block 
-            until a list of points is received.
+            When ready to process new points, notify data manager and block 
+            until points are received.
             """
             self.pipe_conn.send(1)
             recvd_points = self.pipe_conn.recv()
 
-            query = data.Query()
-            query.points = recvd_points
-                
-            query.points = d_u.resample(query.points)
-            query.gpdvs = d_u.to_gpdvs(query.points)
-            query.extract_features()
+            window_end = len(recvd_points)
 
-            for i in range(1):    
-            #for i in range(d_u.TEMPLATES_PER_GESTURE):
-                for j in range(d_u.NUM_GESTURES):
-                    template = self.gesture_templates[j][i]
-                    gesture_name = template.name
+            for window_size in range(INIT_WINDOW_SIZE, window_end + 1, 
+                                     WINDOW_INCREMENT):
+                window_points = []
+                for i in range(window_end - window_size, window_end):
+                    window_points.append(recvd_points[i])
 
-                    score = 1
-                    correction_factors = self.correction_factors(template,
-                                                                 query)
-                    for factor in correction_factors:
-                        score *= factor
-
-                    # TODO: Fix lower bound calculation
-                    """
-                    # Skip DTW check if last best score is lower than
-                    # best possible score for query and current template
-                    lower_bound = self.lower_bound(template, query) * score
-                    if best_score < lower_bound:
-                        continue
-                    """
-
-                    score *= self.dtw(template.gpdvs, query.gpdvs)
+                query = data.Query()
+                query.points = window_points
                     
-                    # Using argmin of DTW for best gesture match
-                    if score < best_score:
-                        best_score = score
-                        best_match_name = gesture_name
+                query.points = d_u.resample(query.points)
+                query.gpdvs = d_u.to_gpdvs(query.points)
+                query.extract_features()
+
+                #for i in range(1):    
+                for i in range(d_u.TEMPLATES_PER_GESTURE):
+                    for j in range(d_u.NUM_GESTURES):
+                        template = self.gesture_templates[j][i]
+                        gesture_name = template.name
+
+                        score = 1
+                        correction_factors = self.correction_factors(template,
+                                                                    query)
+                        for factor in correction_factors:
+                            score *= factor
+                        
+                        # TODO: Fix lower bound calculation
+                        """
+                        # Skip DTW check if last best score is lower than
+                        # best possible score for query and current template
+                        lower_bound = self.lower_bound(template, query) * score
+                        if best_score < lower_bound:
+                            continue
+                        """
+                        
+                        score *= self.dtw(template.gpdvs, query.gpdvs)
+                        
+                        # Using argmin of DTW for best gesture match
+                        if score < best_score:
+                            best_score = score
+                            best_match_name = gesture_name
 
             best_match = [best_score, best_match_name]
 
@@ -118,19 +128,21 @@ class Classifier:
         n = len(template_gpdvs) + 1
         m = len(query_gpdvs) + 1
 
-        cost_matrix = np.empty((n, m))
+        cost_matrix = np.full((n, m), np.inf)
 
-        cost_matrix[:, 0] = np.inf
-        cost_matrix[0, :] = np.inf
         cost_matrix[0, 0] = 0
 
         for i in range(1, n):
-            for j in range(max(1, i - d_u.R), min(m, i + d_u.R), 1):
+            for j in range(max(1, i - d_u.R), min(m, i + d_u.R + 1)):
                 cost = self.local_cost(template_gpdvs[i - 1], query_gpdvs[j - 1])
+
                 cost += np.min([ cost_matrix[i - 1][j - 1],
                                  cost_matrix[i - 1][j],
                                  cost_matrix[i][j - 1] ])
+
                 cost_matrix[i][j] = cost
+        
+        #self.print_cost_matrix(cost_matrix)
 
         return cost_matrix[n - 1][m - 1]
 
@@ -153,3 +165,15 @@ class Classifier:
             correction_factors.append(factor)
 
         return correction_factors
+    
+    # Costs are truncated to make matrix easily interpretable
+    def print_cost_matrix(self, cost_matrix):
+        for row in cost_matrix:
+            for val in row:
+                if val >= 10 and val != np.inf:
+                    print(f"{int(val)}., " , end="")
+                else:
+                    print(f"{val:3.1f}, ", end="")
+            print()
+        print()
+        print()
