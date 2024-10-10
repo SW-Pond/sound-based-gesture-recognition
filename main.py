@@ -2,7 +2,7 @@ import multiprocessing as mp
 import velocity
 import audio
 from plotter import Plotter
-from jackknife.data import Manager
+from jackknife.data_mgr import Manager
 from jackknife.classifier import Classifier
 
 

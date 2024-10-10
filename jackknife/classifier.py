@@ -1,7 +1,7 @@
 import numpy as np
 import csv
 from . import data_utils as d_u
-from . import data
+from . import gestures
 
 
 # gpdvs := gesture path direction vectors
@@ -27,7 +27,7 @@ class Classifier:
             curr_gest_templates = []
 
             for template_num in range(d_u.TEMPLATES_PER_GESTURE):
-                curr_template = data.Template(name=gesture_type)
+                curr_template = gestures.Template(name=gesture_type)
 
                 template_path = f"{dir}t{template_num}.csv"
 
@@ -66,7 +66,7 @@ class Classifier:
                 for i in range(window_end - window_size, window_end):
                     window_points.append(recvd_points[i])
 
-                query = data.Query()
+                query = gestures.Query()
                 query.points = window_points
                     
                 query.points = d_u.resample(query.points)
@@ -85,17 +85,16 @@ class Classifier:
                         for factor in correction_factors:
                             score *= factor
                         
-                        # TODO: Fix lower bound calculation
-                        """
+                        # TODO: Fix lower bound calculation?
+                        
                         # Skip DTW check if last best score is lower than
                         # best possible score for query and current template
                         lower_bound = self.lower_bound(template, query) * score
                         if best_score < lower_bound:
                             continue
-                        """
                         
                         score *= self.dtw(template.gpdvs, query.gpdvs)
-                        
+
                         # Using argmin of DTW for best gesture match
                         if score < best_score:
                             best_score = score
