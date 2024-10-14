@@ -1,6 +1,16 @@
 import numpy as np
 import csv
-from . import data_utils as d_u
+
+
+TEMPLATES_DIR = "jackknife\\templates\\"
+# Key-gesture associations
+GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x", 
+                 '5':"c", '6':"arrow", '7':"check", '8':"caret", '9':"star",
+                 'a':"double arch", 's':"s", 'w':"w", 'y':"y", 'z':"z"}
+TEMPLATES_PER_GESTURE = 3
+NUM_RESAMPLE_POINTS = 16
+# Set Sakoe-Chiba band radius to 10% of resampled time series length
+R = int(np.ceil(0.1 * NUM_RESAMPLE_POINTS))
 
 
 class Gesture:
@@ -11,6 +21,72 @@ class Gesture:
 
     def add_point(self, point):
         self.points.append(point)
+
+    # Resample to NUM_RESAMPLE_POINTS equidistant points along gesture path
+    def resample_points(self):
+        resampled_points = [] 
+        resampled_points.append(self.points[0])
+
+        point_spacing = self.path_len() / (NUM_RESAMPLE_POINTS - 1)
+
+        # Used in case dist between curr point and last point < point spacing
+        accumulated_dist = 0
+
+        i = 1
+        while i < len(self.points) and point_spacing > 0:
+            curr_point = np.array(self.points[i])
+            last_point = np.array(self.points[i - 1])
+            curr_dist = np.linalg.norm(curr_point - last_point)
+
+            if accumulated_dist + curr_dist >= point_spacing:
+                curr_diff_vec = curr_point - last_point
+                if curr_dist != 0:
+                    next_pnt_factor = (point_spacing - accumulated_dist) / curr_dist
+                else:
+                    next_pnt_factor = 0.5
+
+                resampled_point = self.points[i - 1] + next_pnt_factor * curr_diff_vec
+                resampled_points.append(resampled_point)
+                self.points.insert(i, resampled_point)
+                accumulated_dist = 0
+            else:   
+                accumulated_dist += curr_dist
+
+            i += 1
+
+        while len(resampled_points) < NUM_RESAMPLE_POINTS:
+            resampled_points.append(self.points[-1])
+
+        self.points = resampled_points
+
+
+    def path_len(self):
+        length = 0
+
+        for i in range(1, len(self.points)):
+            curr_point = np.array(self.points[i])
+            last_point = np.array(self.points[i - 1])
+            length += np.linalg.norm(curr_point - last_point)
+
+        return length
+
+    # Convert n points to n-1 gesture path direction (unit) vectors
+    def populate_gpdvs(self):
+        # Convert to numpy array for ease of vector operations
+        np_points = np.array(self.points)
+
+        for i in range(len(np_points) - 1):
+            diff_vec = np_points[i + 1] - np_points[i]
+            diff_vec_norm = np.linalg.norm(diff_vec)
+
+            # Handles division by 0
+            if diff_vec_norm != 0:
+                # Normalize
+                gpdv = diff_vec / diff_vec_norm
+            else:
+                gpdv = diff_vec
+
+            self.gpdvs.append(gpdv)
 
     def extract_features(self):
         num_vecs = len(self.gpdvs)
@@ -63,7 +139,7 @@ class Template(Gesture):
             maximum = np.full(components_per_vec, -np.inf)
             minimum = np.full(components_per_vec, np.inf)
 
-            for j in range(max(0, i - d_u.R), min(i + d_u.R + 1, num_vecs)):
+            for j in range(max(0, i - R), min(i + R + 1, num_vecs)):
                 for k in range(components_per_vec):
                     maximum[k] = max(maximum[k], self.gpdvs[j][k])
                     minimum[k] = min(minimum[k], self.gpdvs[j][k])
@@ -78,11 +154,11 @@ class Template(Gesture):
             self.add_point(point)
 
     def log(self, g_key):
-        gesture_type = d_u.GESTURE_TYPES[g_key]
+        gesture_type = GESTURE_TYPES[g_key]
 
-        dir = d_u.PARENT_DIR + gesture_type + "\\"
+        dir = f"{TEMPLATES_DIR}{gesture_type}\\"
 
-        for log_file_num in range(d_u.TEMPLATES_PER_GESTURE):
+        for log_file_num in range(TEMPLATES_PER_GESTURE):
             log_file_path = f"{dir}t{log_file_num}.csv"
 
             with open(log_file_path, "r+", newline='') as log_file:
@@ -103,7 +179,7 @@ class Template(Gesture):
 
                 else:
                     if log_file_num == 2:
-                        print(f"Three templates have already been logged for "
-                              f"gesture: {gesture_type}")
+                        print(f"{TEMPLATES_PER_GESTURE} templates have "
+                              f"already been logged for gesture: {gesture_type}")
                         
                     log_file.close()

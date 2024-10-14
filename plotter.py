@@ -29,8 +29,8 @@ class Plotter:
 
         results_ax = self.fig.add_axes([0.1, 0.03, 0.8, 0.1])
         results_ax.axis('off')
-        gesture = results_ax.text(0.31, 0.01, "", ha='left', va='bottom', fontsize=15)
-        score = results_ax.text(0.53, 0.01, "", ha='left', va='bottom', fontsize=15)
+        gesture = results_ax.text(0.30, 0.01, "", ha='left', va='bottom', fontsize=15)
+        score = results_ax.text(0.55, 0.01, "", ha='left', va='bottom', fontsize=15)
 
         # Start velocity line at origin
         v_x_vals = [0]

@@ -81,7 +81,7 @@ class Input:
 
             self.data_mgr.process_point(point)
             
-            keyboard.on_press(self.data_mgr.check_pressed_key)
+            #keyboard.on_press(self.data_mgr.check_pressed_key)
             # Stop indefinite key press event
             keyboard.on_release(lambda _:_)
 

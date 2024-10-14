@@ -1,8 +1,7 @@
 import numpy as np
 import time
-from . import data_utils as d_u
-from .gestures import Template
 from collections import deque
+from . import gestures as g
 
 
 class Manager:
@@ -20,7 +19,7 @@ class Manager:
         self.point_history = deque(maxlen=self.MAX_HISTORY_POINTS)
 
         # For template logging only
-        self.curr_template = Template()
+        self.curr_template = g.Template()
         self.curr_point = []
 
         # For these, first element is the score, second is the gesture name
@@ -99,10 +98,10 @@ class Manager:
         if key == 't':
             self.curr_template.record_point(self.curr_point)
         
-        if key in d_u.GESTURE_TYPES.keys():
+        if key in g.GESTURE_TYPES.keys():
             self.curr_template.log(g_key=key)
             self.reset_curr_template()
 
     def reset_curr_template(self):
-        self.curr_template = Template()
+        self.curr_template = g.Template()
         print("Current template reset\n")
