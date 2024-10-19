@@ -7,10 +7,10 @@ TEMPLATES_DIR = "jackknife\\templates\\"
 GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x", 
                  '5':"c", '6':"arrow", '7':"check", '8':"caret", '9':"star",
                  'a':"double arch", 's':"s", 'w':"w", 'y':"y", 'z':"z"}
-TEMPLATES_PER_GESTURE = 3
-NUM_RESAMPLE_POINTS = 16
+TEMPLATES_PER_GESTURE = 1
+UNIFORM_RESAMPLE_PTS = 16 # For standard (non-stochastic) resampling
 # Set Sakoe-Chiba band radius to 10% of resampled time series length
-R = int(np.ceil(0.1 * NUM_RESAMPLE_POINTS))
+Radius = int(np.ceil(0.1 * UNIFORM_RESAMPLE_PTS))
 
 
 class Gesture:
@@ -22,12 +22,15 @@ class Gesture:
     def add_point(self, point):
         self.points.append(point)
 
-    # Resample to NUM_RESAMPLE_POINTS equidistant points along gesture path
-    def resample_points(self):
+    """
+    n and variance are specified for stochastic resampling, otherwise, resample
+    to UNIFORM_RESAMPLE_PTS with a uniform distance between each point.
+    """
+    def resample_points(self, n=UNIFORM_RESAMPLE_PTS, variance=0):
         resampled_points = [] 
         resampled_points.append(self.points[0])
 
-        point_spacing = self.path_len() / (NUM_RESAMPLE_POINTS - 1)
+        point_spacing = self.path_len() / (n - 1)
 
         # Used in case dist between curr point and last point < point spacing
         accumulated_dist = 0
@@ -54,7 +57,7 @@ class Gesture:
 
             i += 1
 
-        while len(resampled_points) < NUM_RESAMPLE_POINTS:
+        while len(resampled_points) < n:
             resampled_points.append(self.points[-1])
 
         self.points = resampled_points
@@ -76,15 +79,15 @@ class Gesture:
         np_points = np.array(self.points)
 
         for i in range(len(np_points) - 1):
-            diff_vec = np_points[i + 1] - np_points[i]
-            diff_vec_norm = np.linalg.norm(diff_vec)
+            between_pnt_vec = np_points[i + 1] - np_points[i]
+            vec_norm = np.linalg.norm(between_pnt_vec)
 
             # Handles division by 0
-            if diff_vec_norm != 0:
+            if vec_norm != 0:
                 # Normalize
-                gpdv = diff_vec / diff_vec_norm
+                gpdv = between_pnt_vec / vec_norm
             else:
-                gpdv = diff_vec
+                gpdv = between_pnt_vec
 
             self.gpdvs.append(gpdv)
 
@@ -139,7 +142,7 @@ class Template(Gesture):
             maximum = np.full(components_per_vec, -np.inf)
             minimum = np.full(components_per_vec, np.inf)
 
-            for j in range(max(0, i - R), min(i + R + 1, num_vecs)):
+            for j in range(max(0, i - Radius), min(i + Radius + 1, num_vecs)):
                 for k in range(components_per_vec):
                     maximum[k] = max(maximum[k], self.gpdvs[j][k])
                     minimum[k] = min(minimum[k], self.gpdvs[j][k])

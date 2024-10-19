@@ -115,7 +115,7 @@ class Classifier:
         cost_matrix[0, 0] = 0
 
         for i in range(1, n):
-            for j in range(max(1, i - g.R), min(m, i + g.R + 1)):
+            for j in range(max(1, i - g.Radius), min(m, i + g.Radius + 1)):
                 cost = self.local_cost(template.gpdvs[i - 1], query.gpdvs[j - 1])
 
                 cost += np.min([ cost_matrix[i - 1][j - 1],
