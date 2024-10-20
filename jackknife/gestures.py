@@ -1,10 +1,11 @@
 import numpy as np
+import random as rand
 import csv
 
 
 TEMPLATES_DIR = "jackknife\\templates\\"
 # Key-gesture associations
-GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x", 
+GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x",
                  '5':"c", '6':"arrow", '7':"check", '8':"caret", '9':"star",
                  'a':"double arch", 's':"s", 'w':"w", 'y':"y", 'z':"z"}
 TEMPLATES_PER_GESTURE = 1
@@ -29,39 +30,59 @@ class Gesture:
     def resample_points(self, n=UNIFORM_RESAMPLE_PTS, variance=0):
         resampled_points = [] 
         resampled_points.append(self.points[0])
+        intervals = np.empty(n - 1)
 
-        point_spacing = self.path_len() / (n - 1)
+        # Uniform resampling
+        if variance == 0:
+            intervals = np.full((n - 1), 1 / (n - 1))
+        # Stochastic resampling; randomly determine the fractions of the total
+        #   path length at which each successive point will be interpolated
+        else:
+            for i in range(n - 1):
+                r = rand.random()
+                intervals[i] = 1 + r * np.sqrt(12 * variance)
 
-        # Used in case dist between curr point and last point < point spacing
-        accumulated_dist = 0
+            intervals /= np.sum(intervals)
 
+        """
+        I: interval (distance along path to interpolate from last point)
+        d: distance between current point and last
+        D: accumulates d until D + d is enough to interpolate at I along path
+           from last interpolated point
+        t: factor for calculating the interpolated point's components
+        cnt: count of interpolated points
+        """
+        path_dist = self.path_len()
+        cnt = 0
+        I = path_dist * intervals[0]
+        D = 0
         i = 1
-        while i < len(self.points) and point_spacing > 0:
+        while i < len(self.points):
             curr_point = np.array(self.points[i])
-            last_point = np.array(self.points[i - 1])
-            curr_dist = np.linalg.norm(curr_point - last_point)
+            prev_point = np.array(self.points[i - 1])
+            
+            d = np.linalg.norm(curr_point - prev_point)
 
-            if accumulated_dist + curr_dist >= point_spacing:
-                curr_diff_vec = curr_point - last_point
-                if curr_dist != 0:
-                    next_pnt_factor = (point_spacing - accumulated_dist) / curr_dist
-                else:
-                    next_pnt_factor = 0.5
+            if D + d >= I:
+                t = min(max((I - D) / d, 0), 1)
 
-                resampled_point = self.points[i - 1] + next_pnt_factor * curr_diff_vec
-                resampled_points.append(resampled_point)
-                self.points.insert(i, resampled_point)
-                accumulated_dist = 0
+                interp_point = (1 - t) * prev_point + t * curr_point
+                resampled_points.append(interp_point)
+                self.points.insert(i, interp_point)
+                D = 0
+                cnt += 1
+
+                if cnt < len(intervals):
+                    I = path_dist * intervals[cnt]
             else:   
-                accumulated_dist += curr_dist
+                D += d
 
             i += 1
-
+        
         while len(resampled_points) < n:
             resampled_points.append(self.points[-1])
-
+        
         self.points = resampled_points
-
 
     def path_len(self):
         length = 0
