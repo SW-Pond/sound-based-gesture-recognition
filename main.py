@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import keyboard
 import velocity
 import audio
 from plotter import Plotter
@@ -12,6 +13,13 @@ IN_BUFFER_SIZE = 4096
 SAMPLE_RATE = 44100
 
 FREQ_BIN_RES = SAMPLE_RATE / IN_BUFFER_SIZE
+
+
+def end_program(processes):
+    print("Ending processes...")
+    for p in processes:
+        p.terminate()
+    print("Program has ended.")
 
 
 if __name__ == "__main__":
@@ -43,14 +51,10 @@ if __name__ == "__main__":
     plot_p = mp.Process(target=plotter.plot_all)
     classification_p = mp.Process(target=classifier.classify)
 
-    output_p.start()
-    input_p.start()
-    get_velocity_p.start()
-    plot_p.start()
-    classification_p.start()
+    processes = [output_p, input_p, get_velocity_p, plot_p, classification_p]
 
-    output_p.join()
-    input_p.join()
-    get_velocity_p.join()
-    plot_p.join()
-    classification_p.join()
+    for p in processes:
+        p.start()
+
+    keyboard.wait('esc')
+    end_program(processes)
