@@ -3,7 +3,7 @@ import velocity
 import audio
 from plotter import Plotter
 from jackknife.data_mgr import Manager
-from jackknife.classifier import Classifier
+from jackknife.recognizer import Classifier
 
 
 LOW_FREQ = 18000

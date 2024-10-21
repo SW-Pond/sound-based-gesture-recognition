@@ -1,5 +1,5 @@
-import numpy as np
 import random as rand
+import numpy as np
 import csv
 
 
@@ -49,7 +49,7 @@ class Gesture:
         d: distance between current point and last
         D: accumulates d until D + d is enough to interpolate at I along path
            from last interpolated point
-        t: factor for calculating the interpolated point's components
+        t: factor for calculating the interpolated point
         cnt: count of interpolated points
         """
         path_dist = self.path_len()
@@ -150,10 +150,10 @@ class Template(Gesture):
     def __init__(self, name=""):
         super().__init__()
         self.name = name
-
         # Upper and lower bands for determining lowest possible DTW score
         self.upper = []
         self.lower = []
+        self.rejection_threshold = np.inf
 
     def envelop(self):
         num_vecs = len(self.gpdvs)
