@@ -283,9 +283,11 @@ class Distributions:
     def rejection_threshold(self, beta):
         self.neg /= np.sum(self.neg)
         self.neg = np.cumsum(self.neg)
+        assert (abs(self.neg[self.neg.size() - 1] - 1.0) < .00001)
 
         self.pos /= np.sum(self.pos)
         self.pos = np.cumsum(self.pos)
+        assert (abs(self.pos[self.pos.size() - 1] - 1.0) < .00001)
 
         alpha = 1 / (1 + beta ** 2)
         precision = self.pos / (self.pos + self.neg)
