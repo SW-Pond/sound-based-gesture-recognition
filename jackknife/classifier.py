@@ -1,5 +1,6 @@
 import numpy as np
 import csv
+import os
 from . import gestures as g
 
 
@@ -20,12 +21,13 @@ class Classifier:
         templates = []
 
         for gesture_type in g.GESTURE_TYPES.values():
-            dir = f"{g.TEMPLATES_DIR}{gesture_type}\\"
+            dir = os.path.join(g.TEMPLATES_DIR, gesture_type)
             curr_gest_templates = []
 
             for template_num in range(g.TEMPLATES_PER_GESTURE):
                 curr_template = g.Template(name=gesture_type)
-                template_path = f"{dir}t{template_num}.csv"
+                template_file = f"t{template_num}.csv"
+                template_path = os.path.join(dir, template_file)
                 template_file_empty = True # Assume the file is empty
 
                 with open(template_path, "r") as template_file:

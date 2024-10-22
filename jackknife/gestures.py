@@ -1,8 +1,9 @@
 import numpy as np
 import csv
+import os
 
 
-TEMPLATES_DIR = "jackknife\\templates\\"
+TEMPLATES_DIR = os.path.join("jackknife", "templates")
 # Key-gesture associations
 GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '4':"x", 
                  '5':"c", '6':"arrow", '7':"check", '8':"caret",
@@ -156,10 +157,11 @@ class Template(Gesture):
     def log(self, g_key):
         gesture_type = GESTURE_TYPES[g_key]
 
-        dir = f"{TEMPLATES_DIR}{gesture_type}\\"
+        dir = os.path.join(TEMPLATES_DIR, str(gesture_type))
 
         for log_file_num in range(TEMPLATES_PER_GESTURE):
-            log_file_path = f"{dir}t{log_file_num}.csv"
+            log_file = f"t{log_file_num}.csv"
+            log_file_path = os.path.join(dir, log_file)
 
             with open(log_file_path, "r+", newline='') as log_file:
                 if log_file.read(1) == '':
