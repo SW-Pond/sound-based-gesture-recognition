@@ -4,9 +4,9 @@ import csv
 
 TEMPLATES_DIR = "jackknife\\templates\\"
 # Key-gesture associations
-GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x", 
-                 '5':"c", '6':"arrow", '7':"check", '8':"caret", '9':"star",
-                 'a':"double arch", 's':"s", 'w':"w", 'y':"y", 'z':"z"}
+GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '4':"x", 
+                 '5':"c", '6':"arrow", '7':"check", '8':"caret",
+                 'a':"double arch", 'w':"w", 'z':"z"}
 TEMPLATES_PER_GESTURE = 3
 NUM_RESAMPLE_POINTS = 16
 # Set Sakoe-Chiba band radius to 10% of resampled time series length
