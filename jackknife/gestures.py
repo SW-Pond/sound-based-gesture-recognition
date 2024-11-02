@@ -1,3 +1,4 @@
+import random as rand
 import numpy as np
 import csv
 import os
@@ -5,13 +6,13 @@ import os
 
 TEMPLATES_DIR = os.path.join("jackknife", "templates")
 # Key-gesture associations
-GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '4':"x", 
-                 '5':"c", '6':"arrow", '7':"check", '8':"caret",
-                 'a':"double arch", 'w':"w", 'z':"z"}
-TEMPLATES_PER_GESTURE = 3
-NUM_RESAMPLE_POINTS = 16
+GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x",
+                 '5':"c", '6':"arrow", '7':"check", '8':"caret", '9':"star",
+                 'a':"double arch", 's':"s", 'w':"w", 'y':"y", 'z':"z"}
+TEMPLATES_PER_GESTURE = 1
+UNIFORM_RESAMPLE_PTS = 16 # For standard (non-stochastic) resampling
 # Set Sakoe-Chiba band radius to 10% of resampled time series length
-R = int(np.ceil(0.1 * NUM_RESAMPLE_POINTS))
+Radius = int(np.ceil(0.1 * UNIFORM_RESAMPLE_PTS))
 
 
 class Gesture:
@@ -23,43 +24,66 @@ class Gesture:
     def add_point(self, point):
         self.points.append(point)
 
-    # Resample to NUM_RESAMPLE_POINTS equidistant points along gesture path
-    def resample_points(self):
+    """
+    n and variance are specified for stochastic resampling, otherwise, resample
+    to UNIFORM_RESAMPLE_PTS with a uniform distance between each point.
+    """
+    def resample_points(self, n=UNIFORM_RESAMPLE_PTS, variance=0):
         resampled_points = [] 
         resampled_points.append(self.points[0])
+        intervals = np.empty(n - 1)
 
-        point_spacing = self.path_len() / (NUM_RESAMPLE_POINTS - 1)
+        # Uniform resampling
+        if variance == 0:
+            intervals = np.full((n - 1), 1 / (n - 1))
+        # Stochastic resampling; randomly determine the fractions of the total
+        #   path length at which each successive point will be interpolated
+        else:
+            for i in range(n - 1):
+                r = rand.random()
+                intervals[i] = 1 + r * np.sqrt(12 * variance)
 
-        # Used in case dist between curr point and last point < point spacing
-        accumulated_dist = 0
+            intervals /= np.sum(intervals)
 
+        """
+        I: interval (distance along path to interpolate from last point)
+        d: distance between current point and last
+        D: accumulates d until D + d is enough to interpolate at I along path
+           from last interpolated point
+        t: factor for calculating the interpolated point
+        cnt: count of interpolated points
+        """
+        path_dist = self.path_len()
+        cnt = 0
+        I = path_dist * intervals[0]
+        D = 0
         i = 1
-        while i < len(self.points) and point_spacing > 0:
+        while i < len(self.points):
             curr_point = np.array(self.points[i])
-            last_point = np.array(self.points[i - 1])
-            curr_dist = np.linalg.norm(curr_point - last_point)
+            prev_point = np.array(self.points[i - 1])
+            
+            d = np.linalg.norm(curr_point - prev_point)
 
-            if accumulated_dist + curr_dist >= point_spacing:
-                curr_diff_vec = curr_point - last_point
-                if curr_dist != 0:
-                    next_pnt_factor = (point_spacing - accumulated_dist) / curr_dist
-                else:
-                    next_pnt_factor = 0.5
+            if D + d >= I:
+                t = min(max((I - D) / d, 0), 1)
 
-                resampled_point = self.points[i - 1] + next_pnt_factor * curr_diff_vec
-                resampled_points.append(resampled_point)
-                self.points.insert(i, resampled_point)
-                accumulated_dist = 0
+                interp_point = (1 - t) * prev_point + t * curr_point
+                resampled_points.append(interp_point)
+                self.points.insert(i, interp_point)
+                D = 0
+                cnt += 1
+
+                if cnt < len(intervals):
+                    I = path_dist * intervals[cnt]
             else:   
-                accumulated_dist += curr_dist
+                D += d
 
             i += 1
-
-        while len(resampled_points) < NUM_RESAMPLE_POINTS:
+        
+        while len(resampled_points) < n:
             resampled_points.append(self.points[-1])
-
+        
         self.points = resampled_points
-
 
     def path_len(self):
         length = 0
@@ -77,15 +101,15 @@ class Gesture:
         np_points = np.array(self.points)
 
         for i in range(len(np_points) - 1):
-            diff_vec = np_points[i + 1] - np_points[i]
-            diff_vec_norm = np.linalg.norm(diff_vec)
+            between_pnt_vec = np_points[i + 1] - np_points[i]
+            vec_norm = np.linalg.norm(between_pnt_vec)
 
             # Handles division by 0
-            if diff_vec_norm != 0:
+            if vec_norm != 0:
                 # Normalize
-                gpdv = diff_vec / diff_vec_norm
+                gpdv = between_pnt_vec / vec_norm
             else:
-                gpdv = diff_vec
+                gpdv = between_pnt_vec
 
             self.gpdvs.append(gpdv)
 
@@ -109,13 +133,16 @@ class Gesture:
         abs_dist_vec_norm = np.linalg.norm(abs_dist_vec)
         # Handles division by 0
         if abs_dist_vec_norm != 0:
-            # Normalizing to give a relative measure of per component abs dist
             abs_dist_vec /= abs_dist_vec_norm
 
-        bb = bb_max - bb_min
-
+        bb_vec = bb_max - bb_min
+        bb_vec_norm = np.linalg.norm(bb_vec)
+        # Handles division by 0
+        if bb_vec_norm != 0:
+            bb_vec /= bb_vec_norm
+        
         self.features.append(abs_dist_vec)
-        self.features.append(bb)
+        self.features.append(bb_vec)
 
 
 class Query(Gesture):
@@ -127,10 +154,10 @@ class Template(Gesture):
     def __init__(self, name=""):
         super().__init__()
         self.name = name
-
         # Upper and lower bands for determining lowest possible DTW score
         self.upper = []
         self.lower = []
+        self.rejection_threshold = np.inf
 
     def envelop(self):
         num_vecs = len(self.gpdvs)
@@ -140,7 +167,7 @@ class Template(Gesture):
             maximum = np.full(components_per_vec, -np.inf)
             minimum = np.full(components_per_vec, np.inf)
 
-            for j in range(max(0, i - R), min(i + R + 1, num_vecs)):
+            for j in range(max(0, i - Radius), min(i + Radius + 1, num_vecs)):
                 for k in range(components_per_vec):
                     maximum[k] = max(maximum[k], self.gpdvs[j][k])
                     minimum[k] = min(minimum[k], self.gpdvs[j][k])
@@ -180,7 +207,7 @@ class Template(Gesture):
                     break
 
                 else:
-                    if log_file_num == 2:
+                    if log_file_num == TEMPLATES_PER_GESTURE:
                         print(f"{TEMPLATES_PER_GESTURE} templates have "
                               f"already been logged for gesture: {gesture_type}")
                         

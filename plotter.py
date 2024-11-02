@@ -36,6 +36,10 @@ class Plotter:
         v_x_vals = [0]
         v_y_vals = [0]
 
+        # For now (until Machete is working), switch between showing "Ready (1)" and 
+        # "Ready (2)" when no gesture has been detected to show when to start the gesture
+        ready_for_new_gesture = "Ready (1)"
+
         def update_plots(i):
             if not self.in_plot_q.empty():
                 data = self.in_plot_q.get()
@@ -64,6 +68,16 @@ class Plotter:
         
             if not self.res_q.empty():
                 result = self.res_q.get()
+
+                # For now (until Machete is working), switch between showing "Ready (1)" and 
+                # "Ready (2)" when no gesture has been detected to show when to start the gesture
+                nonlocal ready_for_new_gesture
+                if result[1] == None:
+                    if ready_for_new_gesture == "Ready (1)":
+                        ready_for_new_gesture = "Ready (2)"
+                    else:
+                        ready_for_new_gesture = "Ready (1)"
+                    result[1] = ready_for_new_gesture                
 
                 gesture.set_text(f"Gesture: {result[1]}")
                 score.set_text(f"Score: {result[0]:.2f}")
