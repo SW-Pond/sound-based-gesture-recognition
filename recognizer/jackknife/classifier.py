@@ -1,57 +1,21 @@
 import random as rand
 import numpy as np
-import csv
-import os
 from . import gestures as g
+from ..logger import Logger
 
 
 # gpdvs := gesture path direction vectors
 class Classifier:
-    def __init__(self, pipe_conn):
-        self.pipe_conn = pipe_conn
+    def __init__(self):
+        raw_templates = Logger.get_all_templates()
 
-        self.templates = self.get_all_templates()
-
-        for gesture_type in self.templates:
-            for template in gesture_type:
-                template.resample_points()
-                template.populate_gpdvs()
-                template.envelop()
-                template.extract_features()
+        # Create Jackknife Template objects from raw frames
+        self.templates = {} # For direct access in is_match() using names
+        for raw_t in raw_templates:
+            template = g.Template(name=raw_t[0], points=raw_t[1])
+            self.templates[template.name] = template # Add to dict
 
         self.train()
-
-    def get_all_templates(self):
-        templates = []
-
-        for gesture_type in g.GESTURE_TYPES.values():
-            dir = os.path.join(g.TEMPLATES_DIR, gesture_type)
-            curr_gest_templates = []
-
-            for template_num in range(g.TEMPLATES_PER_GESTURE):
-                curr_template = g.Template(name=gesture_type)
-                template_file = f"t{template_num}.csv"
-                template_path = os.path.join(dir, template_file)
-                template_file_empty = True # Assume the file is empty
-
-                with open(template_path, "r") as template_file:
-                    temp_file_reader = csv.reader(template_file)
-
-                    for line in temp_file_reader:
-                        if line: # If there is a non-empty line
-                            template_file_empty = False
-                            curr_template.add_point([float(val) for val in line])
-
-                    template_file.close()
-
-                if not template_file_empty:
-                    curr_gest_templates.append(curr_template)
-
-            # Only use gestures that have at least one recorded template
-            if len(curr_gest_templates) > 0:
-                templates.append(curr_gest_templates)
-        
-        return templates
     
     # Generate per-template rejection thresholds using synthetic samples
     def train(self):
@@ -109,7 +73,7 @@ class Classifier:
 
                 self.gpsr(pos_sample)
                 pos_sample.resample_points()
-                pos_sample.populate_gpdvs()   
+                pos_sample.populate_gpdvs()
 
                 score = self.dtw(template, pos_sample)    
 
@@ -133,71 +97,32 @@ class Classifier:
             remove_idx = rand.randint(0, N + POINTS_TO_REMOVE - i - 1)
             gesture.points.pop(remove_idx)
 
-    def classify(self):
-        INIT_WINDOW_SIZE = 5
-        WINDOW_INCREMENT = 5
+    def is_match(self, trajectory, gesture_name):
+        match = False
+
+        template = self.templates[gesture_name]
+
+        query = g.Query()
+        query.points = trajectory
+        query.resample_points()
+        query.populate_gpdvs()
+        query.extract_features()
+
+        score = 1
+        correction_factors = self.correction_factors(template, query)
+        for factor in correction_factors:
+            score *= factor
         
-        while True:
-            best_score = np.inf
-            best_match_name = None
+        score *= self.dtw(template, query)
+        #print(f"Template: {template.name}; Score: {score}; Rejection: {template.rejection_threshold}")
 
-            """
-            When ready to process new points, notify data manager and block 
-            until points are received.
-            """
-            self.pipe_conn.send(1)
-            recvd_points = self.pipe_conn.recv()
+        if score < template.rejection_threshold:
+            match = True
 
-            window_end = len(recvd_points)
-
-            for window_size in range(INIT_WINDOW_SIZE, window_end + 1, 
-                                     WINDOW_INCREMENT):
-                window_points = []
-                for i in range(window_end - window_size, window_end):
-                    window_points.append(recvd_points[i])
-
-                query = g.Query()
-                query.points = window_points
-                    
-                query.resample_points()
-                query.populate_gpdvs()
-                query.extract_features()
-   
-                for gesture_type in self.templates:
-                    for template in gesture_type:
-                        gesture_name = template.name
-
-                        score = 1
-                        correction_factors = self.correction_factors(template, query)
-                        for factor in correction_factors:
-                            score *= factor
-                        
-                        lower_bound = self.lower_bound(template, query) * score
-                        if lower_bound > template.rejection_threshold or \
-                           lower_bound > best_score:
-                            continue
-                        
-                        score *= self.dtw(template, query)
-                        #print(f"Template: {template.name}; Score: {score}; Rejection: {template.rejection_threshold}")
-
-                        if score > template.rejection_threshold:
-                            continue
-
-                        # Using argmin of DTW for best gesture match
-                        if score < best_score:
-                            best_score = score
-                            best_match_name = gesture_name
-                #print()
-            #print()
-
-            best_match = [best_score, best_match_name]
-            #print(f"Match: {best_match_name}\n")
-
-            # Notify data manager that classification is done and send match
-            self.pipe_conn.send(2)
-            self.pipe_conn.send(best_match)
+        return match, score
     
-    def dtw(self, template, query):
+    # r := Sakoe-Chiba band radius
+    def dtw(self, template, query, r=2):
         n = len(template.gpdvs) + 1
         m = len(query.gpdvs) + 1
 
@@ -206,7 +131,7 @@ class Classifier:
         cost_matrix[0, 0] = 0
 
         for i in range(1, n):
-            for j in range(max(1, i - g.Radius), min(m, i + g.Radius + 1)):
+            for j in range(max(1, i - r), min(m, i + r + 1)):
                 cost = self.local_cost(template.gpdvs[i - 1], query.gpdvs[j - 1])
 
                 cost += np.min([ cost_matrix[i - 1][j - 1],
@@ -221,23 +146,6 @@ class Classifier:
 
     def local_cost(self, template_vec, query_vec):
         return 1 - np.inner(template_vec, query_vec)
-    
-    def lower_bound(self, template, query):
-        num_vecs = len(template.gpdvs)
-        components_per_vec = len(template.gpdvs[0])
-        lb = 0
-
-        for i in range(num_vecs):
-            lb_inner_product = 0
-            for j in range(components_per_vec):
-                if query.gpdvs[i][j] >= 0:
-                    lb_inner_product += template.upper[i][j] * query.gpdvs[i][j]
-                else:
-                    lb_inner_product += template.lower[i][j] * query.gpdvs[i][j]
-
-            lb += 1 - min(1, max(-1, lb_inner_product))
-
-        return lb
     
     def correction_factors(self, template, query):
         num_feature_vecs = len(template.features)

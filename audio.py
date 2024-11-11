@@ -2,6 +2,7 @@ import numpy as np
 import keyboard
 import pyaudio
 from scipy.signal import windows
+from recognizer import logger
 
 
 class Output:
@@ -39,19 +40,21 @@ class Output:
 
 
 class Input:
-    def __init__(self, in_q, in_plot_q, buffer_size, sample_rate, 
-                 peak_freqs, f_bin_res, data_mgr):
+    def __init__(self, v_q, in_plot_q, recognition_q, buffer_size, sample_rate, 
+                 peak_freqs, f_bin_res):
         self.FILTER_FACTOR = 1.3
-        self.in_q = in_q
+        self.v_q = v_q
         self.plot_q = in_plot_q
+        self.recognition_q = recognition_q
         self.buffer_size = buffer_size
         self.sample_rate = sample_rate
-        self.l_f = np.min(peak_freqs)
-        self.r_f = np.max(peak_freqs)
-        self.f_bin_res = f_bin_res
-        self.data_mgr = data_mgr
-        self.l_f_bin = int(np.round(self.l_f / self.f_bin_res))
-        self.r_f_bin = int(np.round(self.r_f / self.f_bin_res))
+        l_f = np.min(peak_freqs)
+        r_f = np.max(peak_freqs)
+        f_bin_res = f_bin_res
+        self.l_f_bin = int(np.round(l_f / f_bin_res))
+        self.r_f_bin = int(np.round(r_f / f_bin_res))
+        self.template_logger = logger.Logger()
+        self.curr_frame = None # For template logging only
 
     # Gets input in freq domain
     def get(self):
@@ -68,7 +71,7 @@ class Input:
             f_domain_amps = np.abs((np.fft.rfft(t_domain_amps)))
             f_domain_dB_amps = self.to_dB_and_filter(f_domain_amps)
 
-            # Create current point and pass to data manager
+            # Create current frame and pass to data manager
             f_domain_vec = np.copy(f_domain_dB_amps)
 
             l_f_domain_vec = f_domain_vec[self.l_f_bin - 16 : self.l_f_bin + 17]
@@ -77,18 +80,18 @@ class Input:
             self.normalize(l_f_domain_vec)
             self.normalize(r_f_domain_vec)
 
-            point = np.concatenate((l_f_domain_vec, r_f_domain_vec))
+            frame = np.concatenate((l_f_domain_vec, r_f_domain_vec))
 
-            self.data_mgr.process_point(point)
+            self.recognition_q.put(np.copy(frame))
+            self.curr_frame = frame # For template logging only
             
-            keyboard.on_press(self.data_mgr.check_pressed_key)
-            # Stop indefinite key press event
-            keyboard.on_release(lambda _:_)
+            keyboard.on_press(self.check_pressed_key)
+            keyboard.on_release(lambda _:_) # Stop indefinite key press event
 
             data = np.vstack((freqs, f_domain_dB_amps))
 
             self.plot_q.put(np.copy(data))
-            self.in_q.put(data)
+            self.v_q.put(data)
 
     def to_dB_and_filter(self, amps):
         pre_shift_mean = 0
@@ -125,3 +128,16 @@ class Input:
             if max != 0:
                 for i in range(len(vector)):
                     vector[i] /= max
+
+    def check_pressed_key(self, key_event):
+        key = key_event.name
+
+        if key == 'r':
+            self.template_logger.reset_template()
+
+        if key == 't':
+            self.template_logger.record_frame(self.curr_frame)
+        
+        if key in logger.GESTURE_TYPES.keys():
+            self.template_logger.log(g_key=key)
+            self.template_logger.reset_template()

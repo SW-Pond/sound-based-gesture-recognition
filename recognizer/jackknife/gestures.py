@@ -1,18 +1,5 @@
 import random as rand
 import numpy as np
-import csv
-import os
-
-
-TEMPLATES_DIR = os.path.join("jackknife", "templates")
-# Key-gesture associations
-GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x",
-                 '5':"c", '6':"arrow", '7':"check", '8':"caret", '9':"star",
-                 'a':"double arch", 's':"s", 'w':"w", 'y':"y", 'z':"z"}
-TEMPLATES_PER_GESTURE = 1
-UNIFORM_RESAMPLE_PTS = 16 # For standard (non-stochastic) resampling
-# Set Sakoe-Chiba band radius to 10% of resampled time series length
-Radius = int(np.ceil(0.1 * UNIFORM_RESAMPLE_PTS))
 
 
 class Gesture:
@@ -26,9 +13,9 @@ class Gesture:
 
     """
     n and variance are specified for stochastic resampling, otherwise, resample
-    to UNIFORM_RESAMPLE_PTS with a uniform distance between each point.
+    to default n with a uniform distance between each point.
     """
-    def resample_points(self, n=UNIFORM_RESAMPLE_PTS, variance=0):
+    def resample_points(self, n=16, variance=0):
         resampled_points = [] 
         resampled_points.append(self.points[0])
         intervals = np.empty(n - 1)
@@ -145,70 +132,18 @@ class Gesture:
         self.features.append(bb_vec)
 
 
+class Template(Gesture):
+    def __init__(self, name, frames):
+        super().__init__()
+        self.name = name
+        self.points = frames
+        self.rejection_threshold = np.inf
+        
+        self.resample_points()
+        self.populate_gpdvs()
+        self.extract_features()
+
+
 class Query(Gesture):
     def __init__(self):
         super().__init__()
-
-
-class Template(Gesture):
-    def __init__(self, name=""):
-        super().__init__()
-        self.name = name
-        # Upper and lower bands for determining lowest possible DTW score
-        self.upper = []
-        self.lower = []
-        self.rejection_threshold = np.inf
-
-    def envelop(self):
-        num_vecs = len(self.gpdvs)
-        components_per_vec = len(self.gpdvs[0])
-
-        for i in range(num_vecs):
-            maximum = np.full(components_per_vec, -np.inf)
-            minimum = np.full(components_per_vec, np.inf)
-
-            for j in range(max(0, i - Radius), min(i + Radius + 1, num_vecs)):
-                for k in range(components_per_vec):
-                    maximum[k] = max(maximum[k], self.gpdvs[j][k])
-                    minimum[k] = min(minimum[k], self.gpdvs[j][k])
-
-            self.upper.append(maximum)
-            self.lower.append(minimum)
-
-    # For template logging only
-    def record_point(self, point):
-        if len(self.points) == 0 or point is not self.points[-1]:
-            print(f"Recording point {len(self.points)}")
-            self.add_point(point)
-
-    def log(self, g_key):
-        gesture_type = GESTURE_TYPES[g_key]
-
-        dir = os.path.join(TEMPLATES_DIR, str(gesture_type))
-
-        for log_file_num in range(TEMPLATES_PER_GESTURE):
-            log_file = f"t{log_file_num}.csv"
-            log_file_path = os.path.join(dir, log_file)
-
-            with open(log_file_path, "r+", newline='') as log_file:
-                if log_file.read(1) == '':
-                    print(f"Logging template {log_file_num + 1} for gesture: "
-                          f"{gesture_type} ...")
-                    
-                    writer = csv.writer(log_file,)
-
-                    for point in self.points:
-                        writer.writerow(point)
-
-                    log_file.close()
-
-                    print("Successfully logged template")
-
-                    break
-
-                else:
-                    if log_file_num == TEMPLATES_PER_GESTURE:
-                        print(f"{TEMPLATES_PER_GESTURE} templates have "
-                              f"already been logged for gesture: {gesture_type}")
-                        
-                    log_file.close()
