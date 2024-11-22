@@ -8,11 +8,12 @@ GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x",
 TEMPLATES_DIR = os.path.join("recognizer", "templates")
 
 
-"""
-For creating/logging new templates and getting raw template frames for 
-Jackknife Classifier and Machete Segmenter.
-"""
 class Logger:
+    """
+    For creating/logging new templates and getting raw template frames for 
+    Jackknife Classifier and Machete Segmenter.
+    """
+    
     def __init__(self):
         self.template_frames = []
 
@@ -54,11 +55,10 @@ class Logger:
     def get_all_templates():
         templates = []
 
-        for gesture_type in GESTURE_TYPES.values():
-            template_frames = []
-            template_name = gesture_type
-            template_file = f"{template_name}.csv"
+        for template_file in os.listdir(TEMPLATES_DIR):
             template_path = os.path.join(TEMPLATES_DIR, template_file)
+            template_frames = []
+            template_name = template_file[:-4] # Don't include .csv
             template_file_empty = True # Assume the file is empty
 
             with open(template_path, "r") as template_file:

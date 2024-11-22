@@ -4,7 +4,7 @@ import numpy as np
 class VelocityAnalyzer:
     def __init__(self, f_domain_q, v_plot_q, f_bin_res, peak_freqs):
         self.C = 343 # Speed of sound in air (m/s)
-        # Constants for defining what constitutes detected movement
+        # Thresholds for defining what constitutes detected movement
         self.MIN_FREQ_SHIFT = 30
         self.AMP_CUTOFF_FACTOR = 0.3
         # Angles (degrees) from mic
@@ -14,8 +14,6 @@ class VelocityAnalyzer:
         self.f_bin_res = f_bin_res
         self.l_f = np.min(peak_freqs)
         self.r_f = np.max(peak_freqs)
-        # Round func used in case SAMPLE_RATE or IN_BUFFER_SIZE is changed
-        #   such that SAMPLE_RATE is not an integer multiple of IN_BUFFER_SIZE.
         self.l_f_idx = int(np.round(self.l_f / self.f_bin_res))
         self.r_f_idx = int(np.round(self.r_f / self.f_bin_res))
         self.f_domain_q = f_domain_q
@@ -82,8 +80,9 @@ class VelocityAnalyzer:
             freq_shift = 0
 
         mic_freq = speaker_freq + freq_shift
-        # Handles division by zero error
-        v = self.C * (mic_freq - speaker_freq) / (mic_freq + speaker_freq) if (mic_freq + speaker_freq) != 0 else 0
+        # Handle division by zero
+        v = self.C * (mic_freq - speaker_freq) / (mic_freq + speaker_freq) \
+            if (mic_freq + speaker_freq) != 0 else 0
         v_x = v * np.sin(speaker_angle * (np.pi / 180))
         v_y = v * np.cos(speaker_angle * (np.pi / 180))
         v_vec = [v_x, v_y]

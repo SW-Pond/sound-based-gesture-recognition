@@ -17,13 +17,17 @@ class Classifier:
 
         self.train()
     
-    # Generate per-template rejection thresholds using synthetic samples
     def train(self):
+        """
+        Generate per-template rejection thresholds using synthetic samples
+        """
+
         NUM_SYNTHETIC_SAMPLES = 1000
         BIN_COUNT = 1000
         BETA = 1
         SAMPLES_TO_SPLICE = 2 # For creating negative samples
-        template_cnt = len(self.templates)
+        template_list = list(self.templates.values()) # Convert to list for indexing
+        template_cnt = len(template_list)
         distributions = []
         worst_score = 0
 
@@ -34,7 +38,7 @@ class Classifier:
             # Randomly grab templates and splice them together
             for j in range(SAMPLES_TO_SPLICE):
                 t = rand.randint(0, template_cnt - 1)
-                rand_template = self.templates[t][0]
+                rand_template = template_list[t]
 
                 template_len = len(rand_template.points)
                 point_start_idx = rand.randint(0, template_len / SAMPLES_TO_SPLICE)
@@ -46,7 +50,7 @@ class Classifier:
             neg_sample.populate_gpdvs()
 
             for t in range(template_cnt):
-                template = self.templates[t][0]
+                template = template_list[t]
 
                 score = self.dtw(template, neg_sample)
 
@@ -66,7 +70,7 @@ class Classifier:
         for t in range(template_cnt):
             for i in range(NUM_SYNTHETIC_SAMPLES):
                 pos_sample = g.Gesture()
-                template = self.templates[t][0]
+                template = template_list[t]
 
                 for point in template.points:
                     pos_sample.add_point(point)
@@ -81,11 +85,11 @@ class Classifier:
 
         # Get rejection thresholds
         for t in range(template_cnt):
-            template = self.templates[t][0]
+            template = template_list[t]
             threshold = distributions[t].rejection_threshold(BETA)
             template.rejection_threshold = threshold
+            print(f"gesture: {template.name}; threshold: {template.rejection_threshold}")
     
-    # Gesture path stochastic resampling
     def gpsr(self, gesture):
         N = 6
         POINTS_TO_REMOVE = 2
@@ -97,13 +101,14 @@ class Classifier:
             remove_idx = rand.randint(0, N + POINTS_TO_REMOVE - i - 1)
             gesture.points.pop(remove_idx)
 
-    def is_match(self, trajectory, gesture_name):
+    def is_match(self, trajectory, gesture_name):        
         match = False
 
         template = self.templates[gesture_name]
 
         query = g.Query()
         query.points = trajectory
+        
         query.resample_points()
         query.populate_gpdvs()
         query.extract_features()
@@ -114,8 +119,7 @@ class Classifier:
             score *= factor
         
         score *= self.dtw(template, query)
-        #print(f"Template: {template.name}; Score: {score}; Rejection: {template.rejection_threshold}")
-
+        
         if score < template.rejection_threshold:
             match = True
 
@@ -164,7 +168,6 @@ class Classifier:
 
         return correction_factors
     
-    # Costs are truncated to make matrix easily interpretable
     def print_cost_matrix(self, cost_matrix):
         for row in cost_matrix:
             for val in row:

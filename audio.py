@@ -27,7 +27,7 @@ class Output:
         right_samples = np.array( [0.25 * np.sin(2 * np.pi * self.right_freq * (i / self.sample_rate))
                                    for i in range(self.sample_rate)] ).astype(np.float32)
 
-        # Interleaving samples
+        # Interleaving samples for output to correct speakers
         for i in range(0, len(samples), 2):
             samples[i] = left_samples[i // 2]
             samples[i + 1] = right_samples[i // 2]
@@ -35,7 +35,7 @@ class Output:
         # Makes samples longer, creating smoother tone
         while(len(samples) / self.sample_rate < 10000):
             samples = np.concatenate((samples, samples), axis=None)
-
+        
         return samples.tobytes()
 
 
@@ -56,7 +56,6 @@ class Input:
         self.template_logger = logger.Logger()
         self.curr_frame = None # For template logging only
 
-    # Gets input in freq domain
     def get(self):
         in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, 
                                            rate=self.sample_rate, input=True, 
@@ -68,7 +67,7 @@ class Input:
         while True:
             t_domain_amps = np.frombuffer(in_stream.read(self.buffer_size), 
                                           dtype=np.int16) * window
-            f_domain_amps = np.abs((np.fft.rfft(t_domain_amps)))
+            f_domain_amps = np.abs(np.fft.rfft(t_domain_amps))
             f_domain_dB_amps = self.to_dB_and_filter(f_domain_amps)
 
             # Create current frame and pass to data manager
@@ -85,7 +84,7 @@ class Input:
             self.recognition_q.put(np.copy(frame))
             self.curr_frame = frame # For template logging only
             
-            keyboard.on_press(self.check_pressed_key)
+            #keyboard.on_press(self.check_pressed_key)
             keyboard.on_release(lambda _:_) # Stop indefinite key press event
 
             data = np.vstack((freqs, f_domain_dB_amps))
@@ -119,8 +118,11 @@ class Input:
 
         return amps
 
-    # Rescale vector components to range [0,1]
     def normalize(self, vector):
+        """
+        Rescale vector components to range [0,1]
+        """
+
         if not len(vector) == 0:
             max = np.max(vector)
 

@@ -11,11 +11,12 @@ class Gesture:
     def add_point(self, point):
         self.points.append(point)
 
-    """
-    n and variance are specified for stochastic resampling, otherwise, resample
-    to default n with a uniform distance between each point.
-    """
     def resample_points(self, n=16, variance=0):
+        """
+        n and variance are specified for stochastic resampling, otherwise, 
+        resample to default n with a uniform distance between each point.
+        """
+
         resampled_points = [] 
         resampled_points.append(self.points[0])
         intervals = np.empty(n - 1)
@@ -32,14 +33,13 @@ class Gesture:
 
             intervals /= np.sum(intervals)
 
-        """
-        I: interval (distance along path to interpolate from last point)
-        d: distance between current point and last
-        D: accumulates d until D + d is enough to interpolate at I along path
-           from last interpolated point
-        t: factor for calculating the interpolated point
-        cnt: count of interpolated points
-        """
+        
+        # I: interval (distance along path to interpolate from last point)
+        # d: distance between current point and last
+        # D: accumulates d until D + d is enough to interpolate at I along path
+        #    from last interpolated point
+        # t: factor for calculating the interpolated point
+        # cnt: count of interpolated points
         path_dist = self.path_len()
         cnt = 0
         I = path_dist * intervals[0]
@@ -82,8 +82,11 @@ class Gesture:
 
         return length
 
-    # Convert n points to n-1 gesture path direction (unit) vectors
     def populate_gpdvs(self):
+        """
+        Convert n points to n-1 gesture path direction (unit) vectors
+        """
+
         # Convert to numpy array for ease of vector operations
         np_points = np.array(self.points)
 
@@ -93,7 +96,6 @@ class Gesture:
 
             # Handles division by 0
             if vec_norm != 0:
-                # Normalize
                 gpdv = between_pnt_vec / vec_norm
             else:
                 gpdv = between_pnt_vec
@@ -133,10 +135,10 @@ class Gesture:
 
 
 class Template(Gesture):
-    def __init__(self, name, frames):
+    def __init__(self, name, points):
         super().__init__()
         self.name = name
-        self.points = frames
+        self.points = points
         self.rejection_threshold = np.inf
         
         self.resample_points()

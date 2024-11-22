@@ -46,7 +46,7 @@ class Plotter:
                 amps = data[1][self.MIN_F_IDX : self.MAX_F_IDX + 1]
 
                 f_spec_line.set_data(freqs, amps)
-
+            
             if not self.v_plot_q.empty():
                 velocity = self.v_plot_q.get()
                 v_x = velocity[0]
@@ -64,13 +64,13 @@ class Plotter:
                     v_y_vals.append(v_y + v_y_vals[-1])
 
                 v_line.set_data(v_x_vals, v_y_vals)
-        
+            
             if not self.res_q.empty():
                 nonlocal last_result_name
                 nonlocal last_result_score
                 result = self.res_q.get()
-                match_score = result[0]
-                match_name = result[1]
+                match_name = result[0]
+                match_score = result[1]
 
                 if last_result_name != match_name or last_result_score != match_score:
                     gesture.set_text(f"Gesture: {match_name}")
@@ -86,7 +86,6 @@ class Plotter:
         
         plt.show()
 
-    # Returns line associated with freq spectrum subplot
     def init_f_spec_plot(self):
         ax = self.fig.add_subplot(self.gs[0,0], 
                                   xlim=(self.MIN_PLOT_F, self.MAX_PLOT_F), 
@@ -109,7 +108,6 @@ class Plotter:
 
         return line
 
-    # Returns line associated with velocity subplot
     def init_v_plot(self):
         ax = self.fig.add_subplot(self.gs[0,1], xlim=(-10, 10), ylim=(-10, 10), 
                                   xticks=[], yticks=[])
