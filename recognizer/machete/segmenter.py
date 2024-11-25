@@ -6,10 +6,10 @@ from ..logger import Logger
 
 class Segmenter:
     def __init__(self):
-        THETA_D = 40
+        THETA_D = 65
         THETA_R = THETA_D * np.pi / 180
         EPSILON = 0.01
-        self.MAX_HISTORY_FRAMES = 50
+        self.MAX_HISTORY_FRAMES = 100
         self.frame_hist = deque(maxlen=self.MAX_HISTORY_FRAMES)
         raw_templates = Logger.get_all_templates()
 
@@ -36,12 +36,24 @@ class Segmenter:
             # Convert to direction vector and normalize
             x_vec = x - template.prev
             length = np.linalg.norm(x_vec)
+            # Handles division by 0
+            if length == 0:
+                # Set an element to a non-zero value so no vector has only zeros
+                x_vec[0] = 0.00001
+                length = 0.00001
             x_vec /= length
             template.prev = x
         # Can't make a direction vector on first frame since two are needed
         else:
             template.prev = x
             template.row[0][0].score = 0
+            """
+            #######################################
+            for elem in template.row[0]:
+                print(f"{elem.score:1.2f};",end="")
+            print()
+            #######################################
+            """
             return
 
         # Store two rows of matrix data, accessed as a circular buffer
@@ -76,11 +88,17 @@ class Segmenter:
                 curr_elem.gesture_frame_len = self.MAX_HISTORY_FRAMES
             
             # Extend selected path through current column
-            local_cost = length * (1 - np.inner(x_vec, T[col - 1])) ** 2 
+            local_cost = length * (1 - np.inner(x_vec, T[col - 1])) ** 2
             curr_elem.cumulative_cost = best.cumulative_cost + local_cost
             curr_elem.cumulative_length = best.cumulative_length + length
             curr_elem.score = curr_elem.cumulative_cost / curr_elem.cumulative_length
-
+        """
+        #######################################
+        print()
+        for elem in curr_row:
+            print(f"{elem.score:1.2f};",end="")
+        #######################################
+        """
         # Change element score at [0][0] to default first column value
         # after first full iteration since row is reused
         if prev_row[0].score == 0:
@@ -90,7 +108,7 @@ class Segmenter:
         corrected_score = cf * curr_row[T_N].score
 
         # Determine if the underlying recognizer should be called
-        template.total = template.total + curr_row[T_N].score
+        template.total += curr_row[T_N].score
         template.n += 1
         template.s1 = template.s2
         template.s2 = template.s3
@@ -104,6 +122,11 @@ class Segmenter:
         
         # If previous frame is a minimum below the threshold, trigger check
         mean = template.total / (2 * template.n)
+        """
+        #######################################
+        print(f" mean: {mean:1.3f}",end="")
+        #######################################
+        """
         if template.s2 < mean and template.s2 < template.s1 and template.s2 < template.s3:
             # Does not include the current frame
             start_frame_idx = len(self.frame_hist) - template.gesture_frame_len - 1
@@ -122,15 +145,13 @@ class Segmenter:
 
         max_min_ratio = max(openness, template.openness)
         min_openess = min(openness, template.openness)
-        # Handle division by 0
-        if min_openess != 0:
-            max_min_ratio /= min_openess
+        max_min_ratio /= min_openess
+        
         cf_openness = 1 + template.w_closedness * (max_min_ratio - 1)
         cf_openness = min(2, cf_openness)
 
-        # Handle division by 0
-        if f2l_length != 0:
-            f2l /= f2l_length
+        f2l /= f2l_length
+
         cf_f2l = 1 + 0.5 * template.w_f2l * (1 - np.inner(f2l, template.f2l))
         cf_f2l = min(2, cf_f2l) 
         return cf_f2l #* cf_openness

@@ -19,7 +19,6 @@ class Template:
         self.prev = []
         self.first_col_val = (1 - np.cos(theta)) ** 2
 
-    
         # Resample using angular DP and build template and initial CDP matrix
         pts = self.angular_dp(np.array(sample_pts), epsilon)
         N = len(pts)

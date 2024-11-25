@@ -81,7 +81,7 @@ class Plotter:
             return f_spec_line, v_line, gesture, score
 
         animated_plot = FuncAnimation(fig=self.fig, func=update_plots, 
-                                      interval=55, blit=True, 
+                                      interval=30, blit=True, 
                                       cache_frame_data=False)
         
         plt.show()

@@ -32,10 +32,6 @@ class Output:
             samples[i] = left_samples[i // 2]
             samples[i + 1] = right_samples[i // 2]
 
-        # Makes samples longer, creating smoother tone
-        while(len(samples) / self.sample_rate < 10000):
-            samples = np.concatenate((samples, samples), axis=None)
-        
         return samples.tobytes()
 
 
@@ -55,18 +51,29 @@ class Input:
         self.r_f_bin = int(np.round(r_f / f_bin_res))
         self.template_logger = logger.Logger()
         self.curr_frame = None # For template logging only
+        self.last_amps = []
 
     def get(self):
         in_stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, 
                                            rate=self.sample_rate, input=True, 
                                            frames_per_buffer=self.buffer_size)
 
-        window = windows.blackmanharris(self.buffer_size)
-        freqs = np.linspace(0, self.sample_rate / 2, (self.buffer_size // 2) + 1)
+        window = windows.nuttall(self.buffer_size * 2)
+        freqs = np.linspace(0, self.sample_rate / 2, self.buffer_size + 1)
 
         while True:
-            t_domain_amps = np.frombuffer(in_stream.read(self.buffer_size), 
-                                          dtype=np.int16) * window
+            curr_amps = np.frombuffer(in_stream.read(self.buffer_size), 
+                                          dtype=np.int16)
+            
+            # If not first buffer on startup
+            if len(self.last_amps) != 0:
+                t_domain_amps = np.concatenate((self.last_amps, curr_amps))
+                t_domain_amps = t_domain_amps * window
+                self.last_amps = curr_amps
+            else:
+                self.last_amps = curr_amps
+                continue
+
             f_domain_amps = np.abs(np.fft.rfft(t_domain_amps))
             f_domain_dB_amps = self.to_dB_and_filter(f_domain_amps)
 
@@ -84,13 +91,13 @@ class Input:
             self.recognition_q.put(np.copy(frame))
             self.curr_frame = frame # For template logging only
             
+            # For template logging only
             #keyboard.on_press(self.check_pressed_key)
-            keyboard.on_release(lambda _:_) # Stop indefinite key press event
+            #keyboard.on_release(lambda _:_) # Stop indefinite key press event
 
-            data = np.vstack((freqs, f_domain_dB_amps))
-
-            self.plot_q.put(np.copy(data))
-            self.v_q.put(data)
+            visualization_data = np.vstack((freqs, f_domain_dB_amps))
+            self.plot_q.put(np.copy(visualization_data))
+            self.v_q.put(visualization_data)
 
     def to_dB_and_filter(self, amps):
         pre_shift_mean = 0
@@ -111,7 +118,7 @@ class Input:
 
             post_shift_mean += amps[i]
         post_shift_mean /= len(amps)
-            
+
         for i in range(len(amps)):
             if amps[i] < post_shift_mean * self.FILTER_FACTOR:
                 amps[i] = 0

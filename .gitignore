@@ -3,3 +3,5 @@ test*.py
 notes.txt
 gesture_examples.docx
 .vscode
+README.txt
+spectrum_analyzer

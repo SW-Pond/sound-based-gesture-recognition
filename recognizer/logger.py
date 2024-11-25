@@ -1,6 +1,7 @@
 import csv
 import os
 
+
 # Key-gesture associations
 GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x", 
                  '5':"c", '6':"arrow", '7':"check", '8':"caret", '9':"star", 
@@ -18,10 +19,10 @@ class Logger:
         self.template_frames = []
 
     def record_frame(self, frame):
-        num_template_frames = len(self.template.points)
-        if num_template_frames == 0 or frame is not self.template.points[-1]:
+        num_template_frames = len(self.template_frames)
+        if num_template_frames == 0 or frame is not self.template_frames[-1]:
             print(f"Recording frame {num_template_frames + 1}")
-            self.template.add_point(frame)
+            self.template_frames.append(frame)
 
     def reset_template(self):
         self.template_frames = []

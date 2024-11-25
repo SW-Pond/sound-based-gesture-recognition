@@ -41,7 +41,7 @@ class Classifier:
                 rand_template = template_list[t]
 
                 template_len = len(rand_template.points)
-                point_start_idx = rand.randint(0, template_len / SAMPLES_TO_SPLICE)
+                point_start_idx = rand.randint(0, template_len // SAMPLES_TO_SPLICE)
 
                 for k in range(template_len // SAMPLES_TO_SPLICE):
                     neg_sample.add_point(rand_template.points[point_start_idx + k])
@@ -101,7 +101,7 @@ class Classifier:
             remove_idx = rand.randint(0, N + POINTS_TO_REMOVE - i - 1)
             gesture.points.pop(remove_idx)
 
-    def is_match(self, trajectory, gesture_name):        
+    def is_match(self, trajectory, gesture_name):
         match = False
 
         template = self.templates[gesture_name]
@@ -122,7 +122,10 @@ class Classifier:
         
         if score < template.rejection_threshold:
             match = True
-
+        ###############################
+        print()
+        print(f"gesture: {template.name}; score: {score}; threshold: {template.rejection_threshold}")
+        ###############################
         return match, score
     
     # r := Sakoe-Chiba band radius
