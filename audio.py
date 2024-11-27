@@ -58,7 +58,7 @@ class Input:
                                            rate=self.sample_rate, input=True, 
                                            frames_per_buffer=self.buffer_size)
 
-        window = windows.nuttall(self.buffer_size * 2)
+        window = windows.blackmanharris(self.buffer_size * 2)
         freqs = np.linspace(0, self.sample_rate / 2, self.buffer_size + 1)
 
         while True:
@@ -80,8 +80,8 @@ class Input:
             # Create current frame and pass to data manager
             f_domain_vec = np.copy(f_domain_dB_amps)
 
-            l_f_domain_vec = f_domain_vec[self.l_f_bin - 16 : self.l_f_bin + 17]
-            r_f_domain_vec = f_domain_vec[self.r_f_bin - 16 : self.r_f_bin + 17]
+            l_f_domain_vec = f_domain_vec[self.l_f_bin - 22 : self.l_f_bin + 23]
+            r_f_domain_vec = f_domain_vec[self.r_f_bin - 22 : self.r_f_bin + 23]
 
             self.normalize(l_f_domain_vec)
             self.normalize(r_f_domain_vec)
@@ -112,17 +112,17 @@ class Input:
 
         for i in range(len(amps)):
             amps[i] -= pre_shift_mean
-
+            
             if(amps[i] < 0):
                 amps[i] = 0
-
+        
             post_shift_mean += amps[i]
         post_shift_mean /= len(amps)
-
+        
         for i in range(len(amps)):
             if amps[i] < post_shift_mean * self.FILTER_FACTOR:
                 amps[i] = 0
-
+        
         return amps
 
     def normalize(self, vector):

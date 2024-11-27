@@ -13,7 +13,7 @@ FREQ_BIN_RES = SAMPLE_RATE / (IN_BUFFER_SIZE * 2)
 
 
 def end_program(processes):
-    print("Ending processes...")
+    print("\nEnding processes...")
     for p in processes:
         p.terminate()
     print("Program has ended.")

@@ -91,7 +91,7 @@ class Classifier:
             print(f"gesture: {template.name}; threshold: {template.rejection_threshold}")
     
     def gpsr(self, gesture):
-        N = 6
+        N = 8
         POINTS_TO_REMOVE = 2
         VARIANCE = 0.25
 
