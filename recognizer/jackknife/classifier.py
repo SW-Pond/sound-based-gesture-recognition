@@ -122,10 +122,7 @@ class Classifier:
         
         if score < template.rejection_threshold:
             match = True
-        ###############################
-        print()
-        print(f"gesture: {template.name}; score: {score}; threshold: {template.rejection_threshold}")
-        ###############################
+
         return match, score
     
     # r := Sakoe-Chiba band radius

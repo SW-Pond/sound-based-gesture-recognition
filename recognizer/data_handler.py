@@ -24,7 +24,7 @@ class DataHandler:
             self.classifier = Classifier()
             with open(classifier_path, 'wb') as f:
                 pickle.dump(self.classifier, f)
-        if False:#os.path.exists(segmenter_path):
+        if os.path.exists(segmenter_path):
             with open(segmenter_path, 'rb') as f:
                 self.segmenter = pickle.load(f)
         else:
