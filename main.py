@@ -4,6 +4,7 @@ import velocity
 import audio
 from recognizer.data_handler import DataHandler
 from plotter import Plotter
+from mapper import Mapper
 
 LOW_FREQ = 18000
 HIGH_FREQ = 18500
@@ -25,6 +26,7 @@ if __name__ == "__main__":
     input_plot_queue = mp.Queue()
     result_queue = mp.Queue()
     recognition_queue = mp.Queue()
+    action_queue = mp.Queue() # For gesture-action mapping
 
     output_tones = audio.Output(low_freq=LOW_FREQ, high_freq=HIGH_FREQ, 
                                 sample_rate=SAMPLE_RATE)
@@ -36,19 +38,23 @@ if __name__ == "__main__":
     velocity_analyzer = velocity.VelocityAnalyzer(f_domain_q=velocity_queue, 
                                                   v_plot_q=velocity_plot_queue, 
                                                   peak_freqs=(LOW_FREQ, HIGH_FREQ), 
-                                                  f_bin_res=FREQ_BIN_RES)
+                                                  f_bin_res=FREQ_BIN_RES,
+                                                  action_q=action_queue)
     plotter = Plotter(in_plot_q=input_plot_queue, v_plot_q=velocity_plot_queue,
                       res_q=result_queue, low_freq=LOW_FREQ, high_freq=HIGH_FREQ, 
                       f_bin_res=FREQ_BIN_RES)
-    recognizer = DataHandler(data_q=recognition_queue, res_q=result_queue)
+    recognizer = DataHandler(data_q=recognition_queue, res_q=result_queue,
+                             action_q=action_queue)
+    mapper = Mapper(action_q=action_queue)
 
     output_p = mp.Process(target=output_tones.start)
     input_p = mp.Process(target=audio_in.get)
     get_velocity_p = mp.Process(target=velocity_analyzer.get_v)
     plot_p = mp.Process(target=plotter.plot_all)
     recognition_p = mp.Process(target=recognizer.process_data)
+    mapper_p = mp.Process(target=mapper.state_machine)
 
-    processes = [output_p, input_p, get_velocity_p, plot_p, recognition_p]
+    processes = [output_p, input_p, get_velocity_p, recognition_p, plot_p]#, mapper_p]
 
     for p in processes:
         p.start()

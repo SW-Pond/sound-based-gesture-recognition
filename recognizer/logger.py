@@ -2,10 +2,8 @@ import csv
 import os
 
 
-# Key-gesture associations
-GESTURE_TYPES = {'1':"zigzag", '2':"triangle", '3':"rectangle", '4':"x", 
-                 '5':"c", '6':"arrow", '7':"check", '8':"caret", '9':"star", 
-                 'a':"double arch", 's':"s", 'w':"w", 'y':"y", 'z':"z"}
+# Key-gesture associations for logging
+GESTURE_TYPES = {}
 TEMPLATES_DIR = os.path.join("recognizer", "templates")
 
 

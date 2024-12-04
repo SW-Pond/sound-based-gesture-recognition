@@ -2,7 +2,7 @@ import numpy as np
 
 
 class VelocityAnalyzer:
-    def __init__(self, f_domain_q, v_plot_q, f_bin_res, peak_freqs):
+    def __init__(self, f_domain_q, v_plot_q, f_bin_res, peak_freqs, action_q):
         self.C = 343 # Speed of sound in air (m/s)
         # Thresholds for defining what constitutes detected movement
         self.MIN_FREQ_SHIFT = 30
@@ -18,6 +18,7 @@ class VelocityAnalyzer:
         self.r_f_idx = int(np.round(self.r_f / self.f_bin_res))
         self.f_domain_q = f_domain_q
         self.v_plot_q = v_plot_q
+        self.action_q = action_q
 
     def get_v(self):
         while True:
@@ -31,8 +32,11 @@ class VelocityAnalyzer:
                 self.v_plot_q.put(v_vec)
 
     def scan(self, amps):
-        l_v_vec = self.peak_scan(amps, 'L')
-        r_v_vec = self.peak_scan(amps, 'R')
+        l_v_vec, l_shift = self.peak_scan(amps, 'L')
+        r_v_vec, r_shift = self.peak_scan(amps, 'R')
+
+        # For Mapper, 1 ==> new movement/update direction
+        self.action_q.put([1, l_shift, r_shift])
 
         v_x = l_v_vec[0] + r_v_vec[0]
         v_y = l_v_vec[1] + r_v_vec[1]
@@ -62,12 +66,12 @@ class VelocityAnalyzer:
         high_idx = peak_idx + 1
 
         # Scan bins left of peak
-        while amps[low_idx] > amp_cutoff and low_idx >= peak_idx - 16:
+        while amps[low_idx] > amp_cutoff and low_idx >= peak_idx - 22:
             low_shift -= self.f_bin_res
             low_idx -= 1
 
         # Scan bins right of peak
-        while amps[high_idx] > amp_cutoff and high_idx <= peak_idx + 16:
+        while amps[high_idx] > amp_cutoff and high_idx <= peak_idx + 22:
             high_shift += self.f_bin_res
             high_idx += 1
 
@@ -75,10 +79,10 @@ class VelocityAnalyzer:
             freq_shift = low_shift
         if high_shift > np.abs(low_shift):
             freq_shift = high_shift
-
+        """
         if np.abs(freq_shift) < self.MIN_FREQ_SHIFT:
             freq_shift = 0
-
+        """
         mic_freq = speaker_freq + freq_shift
         # Handle division by zero
         v = self.C * (mic_freq - speaker_freq) / (mic_freq + speaker_freq) \
@@ -87,4 +91,4 @@ class VelocityAnalyzer:
         v_y = v * np.cos(speaker_angle * (np.pi / 180))
         v_vec = [v_x, v_y]
 
-        return v_vec
+        return v_vec, freq_shift

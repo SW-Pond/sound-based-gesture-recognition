@@ -16,7 +16,7 @@ class Segmenter:
         # Create Machete Template objects from raw frames
         self.templates = []
         for raw_t in raw_templates:
-            template = Template(name=raw_t[0], sample_pts=raw_t[1], 
+            template = Template(name=raw_t[0], sample_pts=raw_t[1],
                                 theta=THETA_R, epsilon=EPSILON)
             self.templates.append(template)
 
@@ -48,7 +48,7 @@ class Segmenter:
             template.prev = x
             template.row[0][0].score = 0
             #######################################
-            if template.name == "x":
+            if template.name == "snap":
                 for elem in template.row[0]:
                     print(f"{elem.score:1.2f};",end="")
                 print()
@@ -94,7 +94,7 @@ class Segmenter:
             #curr_elem.score = curr_elem.cumulative_cost / curr_elem.cumulative_length
             curr_elem.score = local_cost + best.score
         #######################################
-        if template.name == "x":  
+        if template.name == "snap":  
             print()
             for elem in curr_row:
                 print(f"{elem.score:1.2f};",end="")
@@ -105,15 +105,17 @@ class Segmenter:
         if prev_row[0].score == 0:
             prev_row[0].score = template.first_col_val
 
+        """
         cf = self.calculate_correction_factors(template, curr_row[T_N])
         corrected_score = cf * curr_row[T_N].score
-
+        """
+        
         # Determine if the underlying recognizer should be called
         template.total += curr_row[T_N].score
         template.n += 1
         template.s1 = template.s2
         template.s2 = template.s3
-        template.s3 = corrected_score
+        template.s3 = curr_row[T_N].score
 
         # If new low, save segmentation information
         if template.s3 < template.s2:
@@ -124,7 +126,7 @@ class Segmenter:
         # If previous frame is a minimum below the threshold, trigger check
         mean = template.total / (2 * template.n)
         #######################################
-        if template.name == "x":
+        if template.name == "snap":
             #print(f" mean: {mean:1.3f}; len: {curr_row[T_N].cumulative_length:1.3f}",end="")
             print(f" mean: {mean:1.3f}",end="")
         #######################################
@@ -136,6 +138,7 @@ class Segmenter:
         else:
             return None
     
+    """
     def calculate_correction_factors(self, template, cdp_elem):
         # Calculate the first-to-last vector, then the closeness and first-to-last correction factors
         hist_len = len(self.frame_hist)
@@ -156,4 +159,5 @@ class Segmenter:
 
         cf_f2l = 1 + 0.5 * template.w_f2l * (1 - np.inner(f2l, template.f2l))
         cf_f2l = min(2, cf_f2l) 
-        return 1#cf_f2l
+        return cf_f2l * cf
+    """

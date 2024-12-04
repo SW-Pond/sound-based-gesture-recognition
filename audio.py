@@ -126,9 +126,7 @@ class Input:
         return amps
 
     def normalize(self, vector):
-        """
-        Rescale vector components to range [0,1]
-        """
+        """Rescale vector components to range [0,1]"""
 
         if not len(vector) == 0:
             max = np.max(vector)

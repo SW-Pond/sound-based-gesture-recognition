@@ -1,3 +1,4 @@
+import numpy as np
 import pickle
 import os
 from .jackknife.classifier import Classifier
@@ -5,9 +6,10 @@ from .machete.segmenter import Segmenter
 
 
 class DataHandler:
-    def __init__(self, data_q, res_q):
+    def __init__(self, data_q, res_q, action_q):
         self.data_q = data_q
         self.res_q = res_q
+        self.action_q = action_q
 
         # Get Classifier and Segmenter if already pickled; if not, initialize.
         self.classifier = None
@@ -45,6 +47,10 @@ class DataHandler:
                 while not self.data_q.empty():
                     frame = self.data_q.get()
 
+            # Change mode state in Mapper
+            if np.linalg.norm(frame) < 2.95:
+                self.action_q.put([3])
+
             for template in self.segmenter.templates:
                 trajectory = self.segmenter.consume_input(template, frame)
 
@@ -53,5 +59,7 @@ class DataHandler:
                 else:
                     match, score = self.classifier.is_match(trajectory, template.name)
                     if match:
-                        self.res_q.put((template.name, score))
+                        self.res_q.put([template.name, score])
+                        # For Mapper, 2 ==> new gesture
+                        self.action_q.put([2, template.name])
                         template.reset()

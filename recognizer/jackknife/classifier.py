@@ -16,11 +16,11 @@ class Classifier:
             self.templates[template.name] = template # Add to dict
 
         self.train()
+        self.templates["x"].rejection_threshold = 6.7
+        self.templates["triangle"].rejection_threshold = 7
     
     def train(self):
-        """
-        Generate per-template rejection thresholds using synthetic samples
-        """
+        """Generate per-template rejection thresholds using synthetic samples"""
 
         NUM_SYNTHETIC_SAMPLES = 1000
         BIN_COUNT = 1000
@@ -91,7 +91,7 @@ class Classifier:
             print(f"gesture: {template.name}; threshold: {template.rejection_threshold}")
     
     def gpsr(self, gesture):
-        N = 8
+        N = 7
         POINTS_TO_REMOVE = 2
         VARIANCE = 0.25
 
