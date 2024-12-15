@@ -47,12 +47,6 @@ class Segmenter:
         else:
             template.prev = x
             template.row[0][0].score = 0
-            #######################################
-            if template.name == "snap":
-                for elem in template.row[0]:
-                    print(f"{elem.score:1.2f};",end="")
-                print()
-            #######################################
             
             return
 
@@ -88,27 +82,14 @@ class Segmenter:
                 curr_elem.gesture_frame_len = self.MAX_HISTORY_FRAMES
             
             # Extend selected path through current column
-            local_cost = (1 - np.inner(x_vec, T[col - 1])) ** 2 #length *
-            #curr_elem.cumulative_cost = best.cumulative_cost + local_cost
+            local_cost = (1 - np.inner(x_vec, T[col - 1])) ** 2
             curr_elem.cumulative_length = best.cumulative_length + length
-            #curr_elem.score = curr_elem.cumulative_cost / curr_elem.cumulative_length
             curr_elem.score = local_cost + best.score
-        #######################################
-        if template.name == "snap":  
-            print()
-            for elem in curr_row:
-                print(f"{elem.score:1.2f};",end="")
-        #######################################
         
         # Change element score at [0][0] to default first column value
         # after first full iteration since row is reused
         if prev_row[0].score == 0:
             prev_row[0].score = template.first_col_val
-
-        """
-        cf = self.calculate_correction_factors(template, curr_row[T_N])
-        corrected_score = cf * curr_row[T_N].score
-        """
         
         # Determine if the underlying recognizer should be called
         template.total += curr_row[T_N].score
@@ -125,11 +106,6 @@ class Segmenter:
         
         # If previous frame is a minimum below the threshold, trigger check
         mean = template.total / (2 * template.n)
-        #######################################
-        if template.name == "snap":
-            #print(f" mean: {mean:1.3f}; len: {curr_row[T_N].cumulative_length:1.3f}",end="")
-            print(f" mean: {mean:1.3f}",end="")
-        #######################################
         
         if template.s2 < mean and template.s2 < template.s1 and template.s2 < template.s3:
             # Does not include the current frame
@@ -137,27 +113,3 @@ class Segmenter:
             return list(self.frame_hist)[start_frame_idx : -1]
         else:
             return None
-    
-    """
-    def calculate_correction_factors(self, template, cdp_elem):
-        # Calculate the first-to-last vector, then the closeness and first-to-last correction factors
-        hist_len = len(self.frame_hist)
-        last = self.frame_hist[hist_len - 1]
-        first = self.frame_hist[hist_len - cdp_elem.gesture_frame_len - 1]
-        f2l = last - first
-        f2l_length = np.linalg.norm(f2l)
-        openness = f2l_length / cdp_elem.cumulative_length
-
-        max_min_ratio = max(openness, template.openness)
-        min_openess = min(openness, template.openness)
-        max_min_ratio /= min_openess
-        
-        cf_openness = 1 + template.w_closedness * (max_min_ratio - 1)
-        cf_openness = min(2, cf_openness)
-
-        f2l /= f2l_length
-
-        cf_f2l = 1 + 0.5 * template.w_f2l * (1 - np.inner(f2l, template.f2l))
-        cf_f2l = min(2, cf_f2l) 
-        return cf_f2l * cf
-    """

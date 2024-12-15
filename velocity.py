@@ -79,10 +79,10 @@ class VelocityAnalyzer:
             freq_shift = low_shift
         if high_shift > np.abs(low_shift):
             freq_shift = high_shift
-        """
+        
         if np.abs(freq_shift) < self.MIN_FREQ_SHIFT:
             freq_shift = 0
-        """
+        
         mic_freq = speaker_freq + freq_shift
         # Handle division by zero
         v = self.C * (mic_freq - speaker_freq) / (mic_freq + speaker_freq) \

@@ -24,7 +24,7 @@ class DataHandler:
             self.classifier = Classifier()
             with open(classifier_path, 'wb') as f:
                 pickle.dump(self.classifier, f)
-        if False:#os.path.exists(segmenter_path):
+        if os.path.exists(segmenter_path):
             with open(segmenter_path, 'rb') as f:
                 self.segmenter = pickle.load(f)
         else:
@@ -39,11 +39,6 @@ class DataHandler:
             if self.data_q.empty():
                 continue
             else:
-                #################################
-                if self.data_q.qsize() > 1:
-                    for i in range(10):
-                        print(f"Queue length: {self.data_q.qsize()}")
-                #################################
                 while not self.data_q.empty():
                     frame = self.data_q.get()
 

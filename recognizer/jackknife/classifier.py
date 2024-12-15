@@ -16,8 +16,6 @@ class Classifier:
             self.templates[template.name] = template # Add to dict
 
         self.train()
-        self.templates["x"].rejection_threshold = 6.7
-        self.templates["triangle"].rejection_threshold = 7
     
     def train(self):
         """Generate per-template rejection thresholds using synthetic samples"""
@@ -122,10 +120,7 @@ class Classifier:
         
         if score < template.rejection_threshold:
             match = True
-        ###############################
-        print()
-        print(f"gesture: {template.name}; score: {score}; threshold: {template.rejection_threshold}")
-        ###############################
+
         return match, score
     
     # r := Sakoe-Chiba band radius

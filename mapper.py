@@ -96,7 +96,6 @@ class Mapper:
                                     moving_flag.value = self.STOP
                                 else:
                                     moving_flag.value = self.UP_BACK
-                                prev4_direction = prev3_direction
                                 prev3_direction = prev2_direction
                                 prev2_direction = prev_direction
                                 prev_direction = self.UP_BACK
@@ -107,7 +106,6 @@ class Mapper:
                                     moving_flag.value = self.STOP
                                 else:
                                     moving_flag.value = self.DOWN_FORWARD
-                                prev4_direction = prev3_direction
                                 prev3_direction = prev2_direction
                                 prev2_direction = prev_direction
                                 prev_direction = self.DOWN_FORWARD
@@ -118,7 +116,6 @@ class Mapper:
                                     moving_flag.value = self.STOP
                                 else:
                                     moving_flag.value = self.LEFT
-                                prev4_direction = prev3_direction
                                 prev3_direction = prev2_direction
                                 prev2_direction = prev_direction
                                 prev_direction = self.LEFT
@@ -129,7 +126,6 @@ class Mapper:
                                     moving_flag.value = self.STOP
                                 else:
                                     moving_flag.value = self.RIGHT
-                                prev4_direction = prev3_direction
                                 prev3_direction = prev2_direction
                                 prev2_direction = prev_direction
                                 prev_direction = self.RIGHT
@@ -153,7 +149,6 @@ class Mapper:
                                     looking_flag.value = self.STOP
                                 else:
                                     looking_flag.value = self.UP_BACK
-                                prev4_direction = prev3_direction
                                 prev3_direction = prev2_direction
                                 prev2_direction = prev_direction
                                 prev_direction = self.UP_BACK
@@ -164,7 +159,6 @@ class Mapper:
                                     looking_flag.value = self.STOP
                                 else:
                                     looking_flag.value = self.DOWN_FORWARD
-                                prev4_direction = prev3_direction
                                 prev3_direction = prev2_direction
                                 prev2_direction = prev_direction
                                 prev_direction = self.DOWN_FORWARD
@@ -175,7 +169,6 @@ class Mapper:
                                     looking_flag.value = self.STOP
                                 else:
                                     looking_flag.value = self.LEFT
-                                prev4_direction = prev3_direction
                                 prev3_direction = prev2_direction
                                 prev2_direction = prev_direction
                                 prev_direction = self.LEFT
@@ -186,7 +179,6 @@ class Mapper:
                                     looking_flag.value = self.STOP
                                 else:
                                     looking_flag.value = self.RIGHT
-                                prev4_direction = prev3_direction
                                 prev3_direction = prev2_direction
                                 prev2_direction = prev_direction
                                 prev_direction = self.RIGHT
