@@ -14,7 +14,8 @@ class DataHandler:
         # Get Classifier and Segmenter if already pickled; if not, initialize.
         self.classifier = None
         self.segmenter = None
-        objects_dir = os.path.join("recognizer", "objects")
+        parent_dir = os.path.dirname(os.path.abspath(__file__))
+        objects_dir = os.path.join(parent_dir, "objects")
         classifier_path = os.path.join(objects_dir, "classifier.pkl")
         segmenter_path = os.path.join(objects_dir, "segmenter.pkl")
         if os.path.exists(classifier_path):

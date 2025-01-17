@@ -3,8 +3,9 @@ import os
 
 
 # Key-gesture associations for logging
-GESTURE_TYPES = {}
-TEMPLATES_DIR = os.path.join("recognizer", "templates")
+GESTURE_TYPES = {'1':"star_y(1)", '2':"x_w_l(2)", '3':"z_triangle(3)"}
+
+TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 
 
 class Logger:
